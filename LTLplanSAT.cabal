@@ -6,7 +6,7 @@ cabal-version: 2.2
 
 name:           LTLplanSAT
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/LTLplanSAT#readme>
+description:    Please see the README on GitHub at <https://github.com/AmosNico/LTLplanSAT#readme>
 homepage:       https://github.com/githubuser/LTLplanSAT#readme
 bug-reports:    https://github.com/githubuser/LTLplanSAT/issues
 author:         Amos Nicodemus
