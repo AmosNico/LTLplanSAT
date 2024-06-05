@@ -12,8 +12,8 @@ data Variable = Var
     }
 type Fact = (Int,Int)
 type MutexGroup = [Fact]
-type State = Vector Int
-type Goal = Vector Fact
+type State = [Int]
+type Goal = [Fact]
 data Action = Action
     { actionName :: ByteString
     , actionPre :: [Fact]
@@ -46,7 +46,7 @@ getVarVal pt var val = varValues (variable pt var) Vec.! val
 getStateVals :: FDR -> State -> [ByteString]
 getStateVals pt s =
     let f var i = varValues var Vec.! i in
-    Vec.toList $ Vec.zipWith f (variables pt) s
+    zipWith f (Vec.toList $ variables pt) s
 
 printState :: FDR -> State -> IO ()
 printState pt s = foldMap C8.putStrLn $ getStateVals pt s

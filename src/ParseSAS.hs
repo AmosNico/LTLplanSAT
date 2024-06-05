@@ -67,14 +67,14 @@ readState n = do
     expect "begin_state"
     state <- replicateM n C8.getLine
     expect "end_state"
-    return $ Vec.fromList (map toInt state)
+    return $ map toInt state
 
 readGoal :: IO FDR.Goal
 readGoal = do
     expect "begin_goal"
     goal <- readFacts
     expect "end_goal"
-    return $ Vec.fromList goal
+    return goal
 
 type Effect = (FDR.Fact, FDR.Fact)
 

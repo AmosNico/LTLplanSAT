@@ -22,6 +22,8 @@ data STRIPS = STRIPS
     { numberFacts :: Int
     , showFact :: Fact -> ByteString
     , actions :: [Action]
+    , initalState :: State
+    , goal :: Goal
     , mutexGroups :: [MutexGroup]
     }
 
@@ -30,17 +32,19 @@ showFacts pt facts = C8.intercalate (C8.pack ", ") $ map (showFact pt) facts
 
 showAction :: STRIPS -> Action -> ByteString
 showAction pt (Action name pre add del cost) = C8.concat
-    [name, C8.pack " (", C8.pack (show cost), 
-     C8.pack "): pre = {", showFacts pt pre, 
-     C8.pack "}, post = {", showFacts pt add,
-     C8.pack "}, del = {",  showFacts pt del, C8.pack "}"]
+    [name, C8.pack " (cost ", C8.pack (show cost), 
+     C8.pack "): \n  pre = {", showFacts pt pre, 
+     C8.pack "}, \n  post = {", showFacts pt add,
+     C8.pack "}, \n  del = {",  showFacts pt del, C8.pack "}"]
          
 printSTRIPS :: STRIPS -> IO ()
 printSTRIPS pt = C8.putStrLn $ C8.concat
-    [C8.pack "There are ", C8.pack (show (numberFacts pt)), C8.pack " facts: ",
+    [C8.pack "There are ", C8.pack (show (numberFacts pt)), C8.pack " facts:\n",
      showFacts pt [0..numberFacts pt - 1],
      C8.pack "\nActions:\n", C8.unlines (map (showAction pt) (actions pt)),
-     C8.pack "Mutex Groups:\n", C8.unlines (map (showFacts pt) (mutexGroups pt))]     
+     C8.pack "Initial state:\n", showFacts pt (initalState pt),
+     C8.pack "\nGoal:\n", showFacts pt (goal pt),
+     C8.pack "\nMutex Groups:\n", C8.unlines (map (showFacts pt) (mutexGroups pt))]     
 
 -- Compute the hash of v = 0 for all FDR variables v. The last element is the number of facts
 perfectHash :: FDR.FDR -> Vector Int
@@ -52,6 +56,9 @@ perfectHash fdr = Vec.unfoldrExactN (FDR.nVars fdr + 1) f (0,0) where
 convertFact :: FDR.FDR -> FDR.Fact -> Fact
 convertFact pt (var, val) = (perfectHash pt Vec.! var) + val
 
+convertFacts :: FDR.FDR -> [FDR.Fact] -> [Fact]
+convertFacts pt = map (convertFact pt)
+
 inverseHash :: FDR.FDR -> Int -> Vector FDR.Fact
 inverseHash fdr nFacts = Vec.unfoldrExactN nFacts f (0,0) where
     f (var, val) = 
@@ -61,23 +68,26 @@ inverseHash fdr nFacts = Vec.unfoldrExactN nFacts f (0,0) where
 
 deletingEffects :: FDR.FDR -> FDR.Action -> [Fact]
 deletingEffects pt a = concatMap f (FDR.actionPost a) where 
+    getPre :: Int -> Maybe FDR.Fact
     getPre var = find (\(var', _) -> var == var') (FDR.actionPre a)
+    -- get the deleting effects for the variable var
     f (var, val) = case getPre var of
         Just (_, val') -> [convertFact pt (var, val')]
         Nothing -> [convertFact pt (var,val') | val' <- [0.. FDR.domainSize pt var - 1], val /= val']
 
 convertAction :: FDR.FDR -> FDR.Action -> Action
 convertAction pt a@(FDR.Action name pre post c) = Action name pre' add del c where
-    pre' = map (convertFact pt) pre
-    add = map (convertFact pt) post
+    pre' = convertFacts pt pre
+    add = convertFacts pt post
     del = deletingEffects pt a
 
 fromFDR :: FDR.FDR -> STRIPS
-fromFDR fdr = STRIPS nfacts showfact as (oldMGs ++ newMGs) where
+fromFDR fdr@(FDR.FDR _ mgs s g as) = STRIPS nfacts showfact as' s' g' (oldMGs ++ newMGs) where
     nfacts = perfectHash fdr Vec.! FDR.nVars fdr
     showfact fact = FDR.showFact fdr $ inverseHash fdr nfacts Vec.! fact
-    -- showFact fact = C8.pack $ show $ inverseHash fdr nfacts Vec.! fact
-    as = map (convertAction fdr) $ FDR.actions fdr
-    oldMGs = map (map $ convertFact fdr) (FDR.mutexGroups fdr)
+    as' = map (convertAction fdr) as
+    s' = convertFacts fdr (zip [0..] s)
+    g' = convertFacts fdr g
+    oldMGs = map (convertFacts fdr) mgs
     newMGs = [[convertFact fdr (var, val) | val <- [0..FDR.domainSize fdr var - 1]] 
              | var <- [0..FDR.nVars fdr -1]]
