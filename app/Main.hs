@@ -1,4 +1,4 @@
-module Main (main) where
+module Main where
 
 import ParseSAS (readSAS)
 import STRIPS (fromFDR, printSTRIPS)
