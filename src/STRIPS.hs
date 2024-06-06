@@ -1,4 +1,4 @@
-module STRIPS (Goal, Fact, State, Action(..), STRIPS(..), fromFDR, printSTRIPS) where
+module STRIPS (Fact, MutexGroup, State, Goal, Action(..), STRIPS(..), printSTRIPS, fromFDR) where
 
 import qualified FDR
 import Data.ByteString (ByteString)
@@ -42,7 +42,7 @@ printSTRIPS pt = C8.putStrLn $ C8.concat
     [C8.pack "There are ", C8.pack (show (numberFacts pt)), C8.pack " facts:\n",
      showFacts pt [0..numberFacts pt - 1],
      C8.pack "\nActions:\n", C8.unlines (map (showAction pt) (actions pt)),
-     C8.pack "Initial state:\n", showFacts pt (initalState pt),
+     C8.pack "Initial state:\n", C8.unlines $ map (showFact pt) (initalState pt),
      C8.pack "\nGoal:\n", showFacts pt (goal pt),
      C8.pack "\nMutex Groups:\n", C8.unlines (map (showFacts pt) (mutexGroups pt))]     
 

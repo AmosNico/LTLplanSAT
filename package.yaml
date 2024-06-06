@@ -21,6 +21,7 @@ dependencies:
 - bytestring >= 0.11.5.3
 - vector >= 0.13.1.0
 - containers >= 0.6.7
+- process >= 1.6.19.0
 
 ghc-options:
 - -Wall
@@ -39,7 +40,7 @@ library:
 executables:
   LTLplanSAT-exe:
     main:                Main.hs
-    source-dirs:         app
+    source-dirs:         src
     ghc-options:
     - -threaded
     - -rtsopts

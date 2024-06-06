@@ -13,7 +13,6 @@ author:         Amos Nicodemus
 maintainer:     nicodemusamos@gmail.com
 copyright:      2024 Amos Nicodemus
 license:        BSD-3-Clause
-license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
     README.md
@@ -27,6 +26,7 @@ library
   exposed-modules:
       FDR
       LTL
+      Main
       ParseSAS
       STRIPS
   other-modules:
@@ -40,23 +40,29 @@ library
       base >=4.7 && <5
     , bytestring >=0.11.5.3
     , containers >=0.6.7
+    , process >=1.6.19.0
     , vector >=0.13.1.0
   default-language: Haskell2010
 
 executable LTLplanSAT-exe
   main-is: Main.hs
   other-modules:
+      FDR
+      LTL
+      ParseSAS
+      STRIPS
       Paths_LTLplanSAT
   autogen-modules:
       Paths_LTLplanSAT
   hs-source-dirs:
-      app
+      src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       LTLplanSAT
     , base >=4.7 && <5
     , bytestring >=0.11.5.3
     , containers >=0.6.7
+    , process >=1.6.19.0
     , vector >=0.13.1.0
   default-language: Haskell2010
 
@@ -75,5 +81,6 @@ test-suite LTLplanSAT-test
     , base >=4.7 && <5
     , bytestring >=0.11.5.3
     , containers >=0.6.7
+    , process >=1.6.19.0
     , vector >=0.13.1.0
   default-language: Haskell2010
