@@ -4,6 +4,6 @@ resolver:
 packages:
 - .
 
-flags: {}
-extra-package-dbs: []
-local-bin-path: ./bin
+# flags: {}
+# extra-package-dbs: []
+# local-bin-path: ./bin

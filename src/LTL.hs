@@ -1,3 +1,3 @@
-module LTL where
+module LTL (Formula(..)) where
 
 data Formula = Atom
