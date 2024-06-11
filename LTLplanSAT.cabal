@@ -25,7 +25,7 @@ source-repository head
 library
   exposed-modules:
       FDR
-      LTL
+      ParseLTL
       ParseSAS
       STRIPS
   other-modules:

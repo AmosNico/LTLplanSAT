@@ -1,17 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module ParseLTL (Formula(..), parseLTL) where
+module ParseLTL (parseLTL) where
 
 import Data.Void (Void)
-import Text.Megaparsec (Parsec, parseTest, empty, between, many, (<?>), eof, choice, noneOf, some, try, (<|>), runParser, parseMaybe)
-import Text.Megaparsec.Char (space1, alphaNumChar, string)
+import Text.Megaparsec (Parsec, empty, between, many, (<?>), eof, choice, noneOf, some, try, (<|>), parseMaybe)
+import Text.Megaparsec.Char (space1, alphaNumChar, string, char)
 import Text.Megaparsec.Char.Lexer (space, symbol, skipLineComment, decimal)
 import Text.Megaparsec.Stream (Token)
-import Data.Text (Text, cons)
+import Data.Text (Text)
 import qualified Data.Text.IO as TextIO
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Control.Monad (void)
+import Data.List (intercalate)
 
 type Predicate = ByteString
 data Constraint = AtEnd Predicate
@@ -47,8 +48,15 @@ parens p = between (pSymbol "(") (pSymbol ")") p <?> "parentheses"
 someBut :: [Token Input] -> Parser [Token Input]
 someBut l = some $ noneOf l
 
+parseName :: Parser [Token Input]
+parseName = some (alphaNumChar <|> char '_')
+
 parsePredicate :: Parser Predicate
-parsePredicate = parens (C8.pack <$> someBut "()" <?> "predicate") <* pSpace
+parsePredicate = parens $ do
+    name <- parseName
+    space1
+    args <- some (parseName <* pSpace)
+    return $ C8.pack $ name ++ "(" ++ intercalate ", " args ++ ")"
 
 pKey :: Input -> Parser Input
 pKey keyword = string keyword <* pSpace
@@ -95,8 +103,6 @@ parseDefineBlock = parseBlock "define" $ many $ try parseConstraintsBlock <|> ([
 
 parseConstraints :: Parser Constraints
 parseConstraints = pSpace *> (concat <$> parseDefineBlock) <* eof
-
-data Formula = Atom
 
 parseLTL :: FilePath -> IO Constraints
 parseLTL path = do

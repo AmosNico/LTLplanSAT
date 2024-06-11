@@ -23,8 +23,8 @@ translateToSAS domain problem = do
 main :: IO ()
 main = do
   (domain, problem) <- getInputFiles
-  -- translateToSAS domain problem
-  -- fdr <- readSAS
+  translateToSAS domain problem
+  fdr <- readSAS
   ltl <-  parseLTL problem
   print ltl
-  -- printSTRIPS (fromFDR fdr)
+  printSTRIPS (fromFDR fdr)
