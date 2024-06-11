@@ -39,7 +39,9 @@ library
       base >=4.7 && <5
     , bytestring >=0.11.5.3
     , containers >=0.6.7
+    , megaparsec
     , process >=1.6.19.0
+    , text >=2.0.2
     , vector >=0.13.1.0
   default-language: Haskell2010
 
@@ -57,7 +59,9 @@ executable LTLplanSAT-exe
     , base >=4.7 && <5
     , bytestring >=0.11.5.3
     , containers >=0.6.7
+    , megaparsec
     , process >=1.6.19.0
+    , text >=2.0.2
     , vector >=0.13.1.0
   default-language: Haskell2010
 
@@ -76,6 +80,8 @@ test-suite LTLplanSAT-test
     , base >=4.7 && <5
     , bytestring >=0.11.5.3
     , containers >=0.6.7
+    , megaparsec
     , process >=1.6.19.0
+    , text >=2.0.2
     , vector >=0.13.1.0
   default-language: Haskell2010

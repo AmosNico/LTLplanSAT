@@ -18,6 +18,8 @@ dependencies:
 - process >= 1.6.19.0
 - vector >= 0.13.1.0
 - containers >= 0.6.7
+- megaparsec
+- text >= 2.0.2
 
 ghc-options:
 - -Wall
