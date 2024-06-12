@@ -27,6 +27,7 @@ library
       FDR
       ParseLTL
       ParseSAS
+      SAT
       STRIPS
   other-modules:
       Paths_LTLplanSAT

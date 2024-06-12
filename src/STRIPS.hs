@@ -1,4 +1,5 @@
-module STRIPS (Fact, MutexGroup, State, Goal, Action(..), STRIPS(..), printSTRIPS, fromFDR) where
+module STRIPS (Fact, MutexGroup, State, Goal, Action(..), STRIPS(..), 
+               printSTRIPS, fromFDR, facts, numberActions) where
 
 import qualified FDR
 import Data.ByteString (ByteString)
@@ -17,7 +18,7 @@ data Action = Action
     , actionAdd :: [Fact]
     , actionDel :: [Fact]
     , actionCost :: Int
-    }
+    } deriving(Eq, Ord)
 data STRIPS = STRIPS
     { numberFacts :: Int
     , showFact :: Fact -> ByteString
@@ -27,8 +28,14 @@ data STRIPS = STRIPS
     , mutexGroups :: [MutexGroup]
     }
 
+facts :: STRIPS -> [Fact]
+facts pt = [0 .. numberFacts pt - 1]
+
+numberActions :: STRIPS -> Int
+numberActions pt = length $ actions pt
+
 showFacts :: STRIPS -> [Fact] -> ByteString
-showFacts pt facts = C8.intercalate (C8.pack ", ") $ map (showFact pt) facts
+showFacts pt fs = C8.intercalate (C8.pack ", ") $ map (showFact pt) fs
 
 showAction :: STRIPS -> Action -> ByteString
 showAction pt (Action name pre add del cost) = C8.concat

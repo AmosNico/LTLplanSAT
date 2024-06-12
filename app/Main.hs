@@ -27,4 +27,4 @@ main = do
   fdr <- readSAS
   ltl <-  parseLTL problem
   print ltl
-  printSTRIPS (fromFDR fdr)
+  
