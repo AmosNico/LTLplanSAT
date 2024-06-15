@@ -9,6 +9,15 @@ import qualified Data.ByteString.Char8 as C8
 import Data.ByteString (ByteString)
 import Control.Monad (unless, replicateM)
 import System.IO (withFile, IOMode(ReadMode), Handle)
+import Control.Exception (Exception, throw)
+
+data ParseError = ParseError String String
+
+instance Show ParseError where
+    show (ParseError expected found) = 
+        "Unexpected input while parsing SAS file: Expected "
+        ++ expected ++ ", but got " ++ found ++ "."
+instance Exception ParseError 
 
 hGetLn :: Handle -> IO ByteString
 hGetLn handle = C8.strip <$> C8.hGetLine handle
@@ -19,9 +28,7 @@ toInt = fst . fromJust . C8.readInt
 expect :: Handle -> String -> IO ()
 expect handle s = do
     input <- hGetLn handle
-    unless (input == C8.pack s) $ putStrLn $
-        "Unexpected input while parsing SAS file: Expected "
-        ++ show s ++ ", but found " ++ show input ++ "."
+    unless (input == C8.pack s) $ throw $ ParseError (show s) (show input)
 
 readVersion :: Handle -> IO Int
 readVersion handle = do
@@ -49,9 +56,10 @@ readVariable handle = do
 
 -- unsafe
 toFact :: ByteString -> FDR.Fact
-toFact s =
-    let [var, val] = C8.words s in
-    (toInt var, toInt val)
+toFact s = case C8.words s of 
+    [var, val] -> (toInt var, toInt val)
+    _ -> throw $ ParseError
+        "a fact \"var val\" where var and val are integers" (show s)
 
 readFacts :: Handle -> IO [FDR.Fact]
 readFacts handle = do
@@ -84,9 +92,10 @@ type Effect = (FDR.Fact, FDR.Fact)
 
 -- unsafe
 toEffect :: ByteString -> Effect
-toEffect s =
-    let [_, var, pre, post] = C8.words s in
-    ((toInt var, toInt pre), (toInt var, toInt post))
+toEffect s = case C8.words s of
+    [_, var, pre, post] -> ((toInt var, toInt pre), (toInt var, toInt post))
+    _ -> throw $ ParseError
+        "an effect \"_ var pre post\" where var, pre and post are integers" (show s)
 
 readEffects :: Handle -> IO [Effect]
 readEffects handle = do
@@ -122,7 +131,6 @@ parseSAS handle = do
     _ <- hGetLn handle
     return (FDR.FDR (Vec.fromList vars) mutexGroups state goal actions)
 
-readSAS :: IO FDR.FDR
-readSAS = do 
-    withFile "output.sas" ReadMode parseSAS
+readSAS :: FilePath -> IO FDR.FDR
+readSAS path = withFile path ReadMode parseSAS
     

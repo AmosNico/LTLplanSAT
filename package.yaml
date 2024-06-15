@@ -20,6 +20,7 @@ dependencies:
 - containers >= 0.6.7
 - megaparsec
 - text >= 2.0.2
+- ersatz
 
 ghc-options:
 - -Wall

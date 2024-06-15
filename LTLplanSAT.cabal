@@ -40,6 +40,7 @@ library
       base >=4.7 && <5
     , bytestring >=0.11.5.3
     , containers >=0.6.7
+    , ersatz
     , megaparsec
     , process >=1.6.19.0
     , text >=2.0.2
@@ -60,6 +61,7 @@ executable LTLplanSAT-exe
     , base >=4.7 && <5
     , bytestring >=0.11.5.3
     , containers >=0.6.7
+    , ersatz
     , megaparsec
     , process >=1.6.19.0
     , text >=2.0.2
@@ -81,6 +83,7 @@ test-suite LTLplanSAT-test
     , base >=4.7 && <5
     , bytestring >=0.11.5.3
     , containers >=0.6.7
+    , ersatz
     , megaparsec
     , process >=1.6.19.0
     , text >=2.0.2

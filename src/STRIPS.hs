@@ -28,6 +28,9 @@ data STRIPS = STRIPS
     , mutexGroups :: [MutexGroup]
     }
 
+instance Show Action where
+    show a = C8.unpack $ actionName a
+
 facts :: STRIPS -> [Fact]
 facts pt = [0 .. numberFacts pt - 1]
 
@@ -50,7 +53,7 @@ printSTRIPS pt = C8.putStrLn $ C8.concat
      showFacts pt [0..numberFacts pt - 1],
      C8.pack "\nActions:\n", C8.unlines (map (showAction pt) (actions pt)),
      C8.pack "Initial state:\n", C8.unlines $ map (showFact pt) (initalState pt),
-     C8.pack "\nGoal:\n", showFacts pt (goal pt),
+     C8.pack "Goal:\n", showFacts pt (goal pt),
      C8.pack "\nMutex Groups:\n", C8.unlines (map (showFacts pt) (mutexGroups pt))]     
 
 -- Compute the hash of v = 0 for all FDR variables v. The last element is the number of facts
