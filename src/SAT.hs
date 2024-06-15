@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 module SAT (solve, Plan) where
 
-import STRIPS (STRIPS, Action, Fact)
+import STRIPS (STRIPS, Action, Fact, MutexGroup)
 import qualified STRIPS as S
 import Data.List ((\\), intercalate)
 import qualified Data.Map.Strict as Map
@@ -43,6 +43,9 @@ actionToSAT a t v = E.and $ pre ++ add ++ del where
   add = map (\f -> v ! ActionV t a E.==> v ! FactV t f) $ S.actionAdd a
   del = map (\f -> v ! ActionV t a E.==> E.not (v ! FactV t f)) $ S.actionDel a
 
+mutexToSAT :: MutexGroup -> Time -> Map Variable E.Bit -> E.Bit
+mutexToSAT mg t v = E.or $ map (\f -> v ! FactV t f) mg
+
 frameAxioms :: STRIPS -> Fact -> Time -> Map Variable E.Bit -> E.Bit
 frameAxioms pt f t v = frame1 E.&& frame2 where
   fInAdd = filter (\a -> f `elem` S.actionAdd a) $ S.actions pt
@@ -82,6 +85,7 @@ constraints pt k v = E.and [
   goalToSAT pt k v,
   E.and [actionToSAT a t v | a <- S.actions pt, t <- [1..k]],
   E.and [frameAxioms pt f t v | f <- S.facts pt, t <- [1..k]],
+  E.and [mutexToSAT mg t v | mg <- S.mutexGroups pt, t <- [0..k]],
   E.and [atMostOne pt t v | t <- [1..k]]
   ]
 
