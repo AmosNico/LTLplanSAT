@@ -21,6 +21,7 @@ dependencies:
 - megaparsec
 - text >= 2.0.2
 - ersatz
+- ghc >= 9.6.5
 
 ghc-options:
 - -Wall
