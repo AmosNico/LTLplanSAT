@@ -7,7 +7,8 @@ import qualified Data.ByteString.Char8 as C8
 import Data.List (sort)
 import Data.Maybe (fromJust)
 import qualified Data.Vector as Vec
-import qualified FDR
+import SAS (SAS)
+import qualified SAS
 import System.IO (Handle, IOMode (ReadMode), withFile)
 
 data ParseError = ParseError String String
@@ -47,7 +48,7 @@ readMetric handle = do
   expect handle "end_metric"
   return (toInt n)
 
-readVariable :: Handle -> IO FDR.Variable
+readVariable :: Handle -> IO SAS.Variable
 readVariable handle = do
   expect handle "begin_variable"
   name <- hGetLn handle
@@ -55,10 +56,10 @@ readVariable handle = do
   len <- toInt <$> hGetLn handle
   vals <- replicateM len (hGetLn handle)
   expect handle "end_variable"
-  pure $ FDR.Var name (Vec.fromList vals)
+  pure $ SAS.Var name (Vec.fromList vals)
 
 -- unsafe
-toFact :: ByteString -> FDR.Fact
+toFact :: ByteString -> SAS.Fact
 toFact s = case C8.words s of
   [var, val] -> (toInt var, toInt val)
   _ ->
@@ -67,34 +68,34 @@ toFact s = case C8.words s of
         "a fact \"var val\" where var and val are integers"
         (show s)
 
-readFacts :: Handle -> IO [FDR.Fact]
+readFacts :: Handle -> IO [SAS.Fact]
 readFacts handle = do
   len <- hGetLn handle
   strings <- replicateM (toInt len) (hGetLn handle)
   return (map toFact strings)
 
-readMutexGroup :: Handle -> IO FDR.MutexGroup
+readMutexGroup :: Handle -> IO SAS.MutexGroup
 readMutexGroup handle = do
   expect handle "begin_mutex_group"
   mg <- readFacts handle
   expect handle "end_mutex_group"
   return mg
 
-readState :: Handle -> Int -> IO FDR.State
+readState :: Handle -> Int -> IO SAS.State
 readState handle n = do
   expect handle "begin_state"
   state <- replicateM n (hGetLn handle)
   expect handle "end_state"
   return $ map toInt state
 
-readGoal :: Handle -> IO FDR.Goal
+readGoal :: Handle -> IO SAS.Goal
 readGoal handle = do
   expect handle "begin_goal"
   goal <- readFacts handle
   expect handle "end_goal"
   return goal
 
-type Effect = (FDR.Fact, FDR.Fact)
+type Effect = (SAS.Fact, SAS.Fact)
 
 -- unsafe
 toEffect :: ByteString -> Effect
@@ -112,7 +113,7 @@ readEffects handle = do
   strings <- replicateM (toInt len) (hGetLn handle)
   return (map toEffect strings)
 
-readAction :: Handle -> IO FDR.Action
+readAction :: Handle -> IO SAS.Action
 readAction handle = do
   expect handle "begin_operator"
   name <- hGetLn handle
@@ -123,9 +124,9 @@ readAction handle = do
   let pre2 = filter (\p -> snd p /= (-1)) $ map fst effects
   let pre = sort $ pre1 ++ pre2
   let post = sort $ map snd effects
-  return (FDR.Action name pre post cost)
+  return (SAS.Action name pre post cost)
 
-parseSAS :: Handle -> IO FDR.FDR
+parseSAS :: Handle -> IO SAS
 parseSAS handle = do
   _ <- readVersion handle
   _ <- readMetric handle
@@ -138,7 +139,7 @@ parseSAS handle = do
   nAction <- toInt <$> hGetLn handle
   actions <- replicateM nAction (readAction handle)
   _ <- hGetLn handle
-  return (FDR.FDR (Vec.fromList vars) mutexGroups state goal actions)
+  return (SAS.SAS (Vec.fromList vars) mutexGroups state goal actions)
 
-readSAS :: FilePath -> IO FDR.FDR
+readSAS :: FilePath -> IO SAS
 readSAS path = withFile path ReadMode parseSAS

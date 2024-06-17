@@ -5,21 +5,18 @@ module Main (main) where
 import Control.Exception (SomeException, catch)
 import Control.Monad (unless, void)
 import ParseSAS (readSAS)
+import PlanningTask (fromSAS)
 import SAT (solve)
-import STRIPS (fromFDR)
 import System.Environment (getArgs)
 import System.Process (readProcess)
 import Text.Read (readMaybe)
 
 solveSAS :: FilePath -> IO ()
 solveSAS path = do
-  fdr <- readSAS path
+  sas <- readSAS path
   putStrLn "Translating to STRIPS."
-  plan <- solve $ fromFDR fdr
+  plan <- solve $ fromSAS sas
   print plan
-
--- ltl <-  parseLTL problem
--- print ltl
 
 solvePDDL :: FilePath -> FilePath -> IO ()
 solvePDDL domain problem = do

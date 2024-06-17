@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module ParsePDDLConstraint (parsePDDLConstraints, Constraint (..), Constraints(..)) where
+module ParsePDDLConstraint (parsePDDLConstraints) where
 
+import Constraints (PDDLConstraint (..), PDDLConstraints (..), singleHard, singleSoft)
 import Control.Monad (void)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
@@ -14,34 +15,9 @@ import Text.Megaparsec.Char (alphaNumChar, char, space1, string)
 import Text.Megaparsec.Char.Lexer (decimal, skipLineComment, space, symbol)
 import Text.Megaparsec.Stream (Token)
 
-type Predicate = ByteString
+type Constraint = PDDLConstraint ByteString
 
-data Constraint
-  = AtEnd Predicate
-  | Always Predicate
-  | Sometime Predicate
-  | Within Int Predicate
-  | AtMostOnce Predicate
-  | SometimeAfter Predicate Predicate
-  | SometimeBefore Predicate Predicate
-  | AlwaysWithin Int Predicate Predicate
-  | HoldDuring Int Int Predicate
-  | HoldAfter Int Predicate
-  deriving (Show)
-
-data Constraints = Constraints {hardConstraints :: [Constraint], softConstraints :: [Constraint]}
-
-instance Semigroup Constraints where
-  Constraints hc1 sc1 <> Constraints hc2 sc2 =
-    Constraints (hc1 <> hc2) (sc1 <> sc2)
-
-instance Monoid Constraints where
-  mempty = Constraints mempty mempty
-
-singleHard, singleSoft :: Constraint -> Constraints
-singleHard c = Constraints [c] []
-singleSoft c = Constraints [] [c]
-
+type Constraints = PDDLConstraints ByteString
 
 type Input = Text
 
@@ -62,7 +38,7 @@ someBut l = some $ noneOf l
 parseName :: Parser [Token Input]
 parseName = some (alphaNumChar <|> char '_')
 
-parsePredicate :: Parser Predicate
+parsePredicate :: Parser ByteString
 parsePredicate = parens $ do
   name <- parseName
   space1
@@ -72,8 +48,8 @@ parsePredicate = parens $ do
 pKey :: Input -> Parser Input
 pKey keyword = string keyword <* pSpace
 
-parseConstraint' :: Parser Constraint
-parseConstraint' =
+parsePDDLConstraint :: Parser Constraint
+parsePDDLConstraint =
   parens
     ( choice
         [ AtEnd <$> (pKey "at end" *> parsePredicate),
@@ -91,10 +67,10 @@ parseConstraint' =
     )
 
 parseSoftConstraint :: Parser Constraints
-parseSoftConstraint = singleSoft <$> (pKey "preference" *> some alphaNumChar *> pSpace *> parseConstraint')
+parseSoftConstraint = singleSoft <$> (pKey "preference" *> some alphaNumChar *> pSpace *> parsePDDLConstraint)
 
 parseHardConstraint :: Parser Constraints
-parseHardConstraint = singleHard <$> parseConstraint'
+parseHardConstraint = singleHard <$> parsePDDLConstraint
 
 parseConstraint :: Parser Constraints
 parseConstraint = parens (parseSoftConstraint <|> parseHardConstraint)

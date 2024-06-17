@@ -24,12 +24,14 @@ source-repository head
 
 library
   exposed-modules:
-      FDR
+      Constraints
       LTL
       ParsePDDLConstraint
       ParseSAS
+      PlanningTask
+      SAS
       SAT
-      STRIPS
+      Types
   other-modules:
       Paths_LTLplanSAT
   autogen-modules:

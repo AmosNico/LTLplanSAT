@@ -1,5 +1,5 @@
 module LTL (Formula (..)) where
-import ParsePDDLConstraint (Constraint(..))
+import Constraints (PDDLConstraint(..))
 import Data.ByteString (ByteString)
 import GHC.Utils.Misc (nTimes)
 

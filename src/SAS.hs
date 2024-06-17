@@ -1,11 +1,11 @@
-module FDR
+module SAS
   ( Variable (..),
     Fact,
     MutexGroup,
     State,
     Goal,
     Action (..),
-    FDR (..),
+    SAS (..),
     domainSize,
     variable,
     nVars,
@@ -38,7 +38,7 @@ data Action = Action
     actionCost :: Int
   }
 
-data FDR = FDR
+data SAS = SAS
   { variables :: Vector Variable,
     mutexGroups :: [MutexGroup],
     initialState :: State,
@@ -49,27 +49,19 @@ data FDR = FDR
 instance Show Variable where
   show (Var name vals) = show name ++ " in " ++ show vals
 
-variable :: FDR -> Int -> Variable
+variable :: SAS -> Int -> Variable
 variable pt var = variables pt Vec.! var
 
-domainSize :: FDR -> Int -> Int
-domainSize fdr var = length $ varValues (variable fdr var)
+domainSize :: SAS -> Int -> Int
+domainSize sas var = length $ varValues (variable sas var)
 
-nVars :: FDR -> Int
-nVars fdr = length $ variables fdr
+nVars :: SAS -> Int
+nVars sas = length $ variables sas
 
-getVarVal :: FDR -> Int -> Int -> ByteString
+getVarVal :: SAS -> Int -> Int -> ByteString
 getVarVal pt var val = varValues (variable pt var) Vec.! val
 
-getStateVals :: FDR -> State -> [ByteString]
-getStateVals pt s =
-  let f var i = varValues var Vec.! i
-   in zipWith f (Vec.toList $ variables pt) s
-
-printState :: FDR -> State -> IO ()
-printState pt s = foldMap C8.putStrLn $ getStateVals pt s
-
-showFact :: FDR -> Fact -> ByteString
+showFact :: SAS -> Fact -> ByteString
 showFact pt (var, val) =
   C8.concat
     [varName (variables pt Vec.! var), C8.pack " = ", getVarVal pt var val]

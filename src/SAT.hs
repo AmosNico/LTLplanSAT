@@ -3,107 +3,88 @@
 module SAT (solve, Plan) where
 
 import Data.Bits (bit, (.&.))
-import Data.List (intercalate, (\\))
+import Data.List ((\\))
 import Data.Map (Map, (!))
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
 import qualified Ersatz as E
-import STRIPS (Action, Fact, MutexGroup, STRIPS)
-import qualified STRIPS as S
+import Types
+import Constraints (Constraints (constraintsToSat))
 
-type Time = Int
+numberAtMostOneV :: PlanningTask c -> Int
+numberAtMostOneV pt = ceiling (logBase 2 $ fromIntegral $ ptNumberActions pt :: Double)
 
-data Variable = ActionV Time Action | FactV Time Fact | AtMostOneV Time Int
-  deriving (Eq, Ord, Show)
+actionToInt :: PlanningTask c -> Action -> Int
+actionToInt pt a = Map.fromList (zip (ptActions pt) [0 ..]) Map.! a
 
-newtype Plan = Plan [Action]
+defineVariables :: (E.MonadSAT s m) => PlanningTask c -> Time -> m (Map Variable E.Bit)
+defineVariables pt k = sequence $ Map.fromList list
+  where
+    list = map (,E.exists) (actionVars ++ factVars ++ amoVars)
+    actionVars = [ActionV t a | a <- ptActions pt, t <- [1 .. k]]
+    factVars = [FactV t f | f <- ptFacts pt, t <- [0 .. k]]
+    amoVars = [AtMostOneV t i | i <- [0 .. numberAtMostOneV pt], t <- [1 .. k]]
 
-instance Show Plan where
-  show (Plan as) =
-    "Plan with length "
-      ++ show (length as)
-      ++ " and cost "
-      ++ show (sum $ map S.actionCost as)
-      ++ ":\n  "
-      ++ intercalate "\n  " (map show as)
-
-numberAtMostOneV :: STRIPS -> Int
-numberAtMostOneV pt = ceiling (logBase 2 $ fromIntegral $ S.numberActions pt :: Double)
-
-actionToInt :: STRIPS -> Action -> Int
-actionToInt pt a = Map.fromList (zip (S.actions pt) [0 ..]) Map.! a
-
-initialToSAT :: STRIPS -> Map Variable E.Bit -> E.Bit
+initialToSAT :: PlanningTask c -> Map Variable E.Bit -> E.Bit
 initialToSAT pt v = E.and $ pos ++ neg
   where
-    pos = map (\f -> v ! FactV 0 f) $ S.initalState pt
-    neg = map (\f -> E.not $ v ! FactV 0 f) $ S.facts pt \\ S.initalState pt
+    pos = map (\f -> v ! FactV 0 f) $ ptInitalState pt
+    neg = map (\f -> E.not $ v ! FactV 0 f) $ ptFacts pt \\ ptInitalState pt
 
-goalToSAT :: STRIPS -> Time -> Map Variable E.Bit -> E.Bit
-goalToSAT pt k v = E.and $ map (\f -> v ! FactV k f) $ S.goal pt
+goalToSAT :: PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit
+goalToSAT pt k v = E.and $ map (\f -> v ! FactV k f) $ ptGoal pt
 
 actionToSAT :: Action -> Time -> Map Variable E.Bit -> E.Bit
 actionToSAT a t v = E.and $ pre ++ add ++ del
   where
-    pre = map (\f -> v ! ActionV t a E.==> v ! FactV (t - 1) f) $ S.actionPre a
-    add = map (\f -> v ! ActionV t a E.==> v ! FactV t f) $ S.actionAdd a
-    del = map (\f -> v ! ActionV t a E.==> E.not (v ! FactV t f)) $ S.actionDel a
+    pre = map (\f -> v ! ActionV t a E.==> v ! FactV (t - 1) f) $ actionPre a
+    add = map (\f -> v ! ActionV t a E.==> v ! FactV t f) $ actionAdd a
+    del = map (\f -> v ! ActionV t a E.==> E.not (v ! FactV t f)) $ actionDel a
 
 mutexToSAT :: MutexGroup -> Time -> Map Variable E.Bit -> E.Bit
 mutexToSAT mg t v = E.or $ map (\f -> v ! FactV t f) mg
 
-frameAxioms :: STRIPS -> Fact -> Time -> Map Variable E.Bit -> E.Bit
+frameAxioms :: PlanningTask c -> Fact -> Time -> Map Variable E.Bit -> E.Bit
 frameAxioms pt f t v = frame1 E.&& frame2
   where
-    fInAdd = filter (\a -> f `elem` S.actionAdd a) $ S.actions pt
+    fInAdd = filter (\a -> f `elem` actionAdd a) $ ptActions pt
     frame1 = E.or $ [v ! FactV (t - 1) f, E.not $ v ! FactV t f] ++ map (\f' -> v ! ActionV t f') fInAdd
-    fInDel = filter (\a -> f `elem` S.actionDel a) $ S.actions pt
+    fInDel = filter (\a -> f `elem` actionDel a) $ ptActions pt
     frame2 = E.or $ [E.not $ v ! FactV (t - 1) f, v ! FactV t f] ++ map (\f' -> v ! ActionV t f') fInDel
 
 -- Is the next one better?
-atMostOne' :: STRIPS -> Time -> Map Variable E.Bit -> E.Bit
-atMostOne' pt t v = E.and [constr a i | a <- S.actions pt, i <- [0 .. numberAtMostOneV pt - 1]]
+atMostOne' :: PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit
+atMostOne' pt t v = E.and [constr a i | a <- ptActions pt, i <- [0 .. numberAtMostOneV pt - 1]]
   where
     n a i = (if actionToInt pt a .&. bit i == bit i then id else E.not) $ v ! AtMostOneV t i
     constr a i = v ! ActionV t a E.==> n a i
 
 -- Use the variables "AtMostOneV t i" for i = 0..n to
-atMostOne :: STRIPS -> Time -> Map Variable E.Bit -> E.Bit
-atMostOne pt t v = E.and [constr a | a <- S.actions pt]
+atMostOne :: PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit
+atMostOne pt t v = E.and [constr a | a <- ptActions pt]
   where
     constr a = v ! ActionV t a E.==> (bits E.=== encodeAction a)
     bits = E.Bits [v ! AtMostOneV t i | i <- [0 .. numberAtMostOneV pt - 1]]
     encodeAction a = E.encode (toInteger $ actionToInt pt a)
 
-defineVariables :: (E.MonadSAT s m) => STRIPS -> Time -> m (Map Variable E.Bit)
-defineVariables pt k = sequence $ Map.fromList list
-  where
-    list = map (,E.exists) (actionVars ++ factVars ++ amoVars)
-    actionVars = [ActionV t a | a <- S.actions pt, t <- [1 .. k]]
-    factVars = [FactV t f | f <- S.facts pt, t <- [0 .. k]]
-    amoVars = [AtMostOneV t i | i <- [0 .. numberAtMostOneV pt], t <- [1 .. k]]
-
-{-defineAMOVariables :: (E.MonadSAT s m) => STRIPS -> Time -> m E.Bits
-defineAMOVariables pt k = fmap Bits (replicateM n exists) l where
-  n = -}
-
 -- k is the maximum number of timesteps in the SAT encoding
-constraints :: STRIPS -> Time -> Map Variable E.Bit -> E.Bit
-constraints pt k v =
+ptToSAT :: Constraints c => PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit
+ptToSAT pt k v =
   E.and
     [ initialToSAT pt v,
       goalToSAT pt k v,
-      E.and [actionToSAT a t v | a <- S.actions pt, t <- [1 .. k]],
-      E.and [frameAxioms pt f t v | f <- S.facts pt, t <- [1 .. k]],
-      E.and [mutexToSAT mg t v | mg <- S.mutexGroups pt, t <- [0 .. k]],
+      E.and [actionToSAT a t v | a <- ptActions pt, t <- [1 .. k]],
+      E.and [frameAxioms pt f t v | f <- ptFacts pt, t <- [1 .. k]],
+      constraintsToSat (ptConstraints pt) k v,
+      E.and [mutexToSAT mg t v | mg <- ptMutexGroups pt, t <- [0 .. k]],
       E.and [atMostOne pt t v | t <- [1 .. k]]
     ]
 
-extractPlan :: STRIPS -> Time -> Map Variable Bool -> Plan
+extractPlan :: PlanningTask c -> Time -> Map Variable Bool -> Plan
 extractPlan pt k v = Plan $ mapMaybe extractAction [1 .. k]
   where
     extractAction :: Time -> Maybe Action
-    extractAction t = case filter (\a -> v ! ActionV t a) $ S.actions pt of
+    extractAction t = case filter (\a -> v ! ActionV t a) $ ptActions pt of
       [] -> Nothing
       [a] -> Just a
       l ->
@@ -115,13 +96,13 @@ extractPlan pt k v = Plan $ mapMaybe extractAction [1 .. k]
             ++ show l
             ++ "."
 
-callSAT :: STRIPS -> Time -> IO (E.Result, Maybe (Map Variable Bool))
+callSAT :: Constraints c => PlanningTask c -> Time -> IO (E.Result, Maybe (Map Variable Bool))
 callSAT pt k = E.solveWith E.cryptominisat5 $ do
   vars <- defineVariables pt k
-  E.assert $ constraints pt k vars
+  E.assert $ ptToSAT pt k vars
   return vars
 
-iterativeSolve :: STRIPS -> Time -> IO Plan
+iterativeSolve :: Constraints c => PlanningTask c -> Time -> IO Plan
 iterativeSolve pt k = do
   putStrLn $ "Calling the SAT-solver with maximal plan length " ++ show k ++ "."
   (res, mSolution) <- callSAT pt k
@@ -132,6 +113,6 @@ iterativeSolve pt k = do
       Nothing -> error "The SAT-solver said the planning problem is solvable, but did not return a solution."
       Just solution -> return $ extractPlan pt k solution
 
-solve :: STRIPS -> IO Plan
+solve :: Constraints c => PlanningTask c -> IO Plan
 solve pt = do
   iterativeSolve pt 5
