@@ -1,23 +1,79 @@
-module PlanningTask (fromSAS) where
+module PlanningTask
+  ( PlanningTask (..),
+    ptFacts,
+    ptNumberActions,
+    ptShowFacts,
+    ptShowAction,
+    printPlanningTask,
+    fromSAS,
+  )
+where
 
-import Constraints (NoConstraint (..))
+import Constraints (Constraints (showConstraints))
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as C8
 import Data.List (find)
 import Data.Vector (Vector)
 import qualified Data.Vector as Vec
 import SAS (SAS)
 import qualified SAS
-import Types
+import Types (Action (Action), Fact (Fact), Goal, MutexGroup (MutexGroup), State)
 
--- Compute the hash of v = 0 for all SAS variables v. The last element is the number of facts
-perfectHash :: SAS -> Vector Int
-perfectHash sas = Vec.unfoldrExactN (SAS.nVars sas + 1) f (0, 0)
-  where
-    -- f iterates through all variables v and computes the hash for v = 0,
-    -- while remembering number of the variable and hash value
-    f (var, hash) = (hash, (var + 1, hash + SAS.domainSize sas var))
+data PlanningTask constraintType = PlanningTask
+  { ptNumberFacts :: Int,
+    ptShowFact :: Fact -> ByteString,
+    ptActions :: [Action],
+    ptInitalState :: State,
+    ptGoal :: Goal,
+    ptConstraints :: constraintType Fact,
+    ptMutexGroups :: [MutexGroup]
+  }
+
+ptFacts :: PlanningTask a -> [Fact]
+ptFacts pt = map Fact [0 .. ptNumberFacts pt - 1]
+
+ptNumberActions :: PlanningTask a -> Int
+ptNumberActions pt = length $ ptActions pt
+
+ptShowFacts :: PlanningTask a -> [Fact] -> ByteString
+ptShowFacts pt fs = C8.intercalate (C8.pack ", ") $ map (ptShowFact pt) fs
+
+ptShowAction :: PlanningTask a -> Action -> ByteString
+ptShowAction pt (Action name pre add del cost) =
+  C8.concat
+    [ name,
+      C8.pack " (cost ",
+      C8.pack (show cost),
+      C8.pack "): \n  pre = {",
+      ptShowFacts pt pre,
+      C8.pack "}, \n  post = {",
+      ptShowFacts pt add,
+      C8.pack "}, \n  del = {",
+      ptShowFacts pt del,
+      C8.pack "}"
+    ]
+
+printPlanningTask :: (Constraints a) => PlanningTask a -> IO ()
+printPlanningTask pt =
+  C8.putStrLn $
+    C8.concat
+      [ C8.pack "There are ",
+        C8.pack (show (ptNumberFacts pt)),
+        C8.pack " facts:\n",
+        ptShowFacts pt (ptFacts pt),
+        C8.pack "\nActions:\n",
+        C8.unlines (map (ptShowAction pt) (ptActions pt)),
+        C8.pack "Initial state:\n",
+        C8.unlines $ map (ptShowFact pt) (ptInitalState pt),
+        C8.pack "Goal:\n",
+        ptShowFacts pt (ptGoal pt),
+        showConstraints (ptShowFact pt) (ptConstraints pt),
+        C8.pack "\nMutex Groups:\n",
+        C8.unlines (map (ptShowFacts pt . \(MutexGroup facts) -> facts) (ptMutexGroups pt))
+      ]
 
 convertFact :: SAS -> SAS.Fact -> Fact
-convertFact sas (var, val) = (perfectHash sas Vec.! var) + val
+convertFact sas (var, val) = Fact $ (SAS.perfectHash sas Vec.! var) + val
 
 convertFacts :: SAS -> [SAS.Fact] -> [Fact]
 convertFacts sas = map (convertFact sas)
@@ -47,16 +103,17 @@ convertAction sas a@(SAS.Action name pre post c) = Action name pre' add del c
     add = convertFacts sas post
     del = deletingEffects sas a
 
-fromSAS :: SAS -> PlanningTask NoConstraint
-fromSAS sas@(SAS.SAS _ mgs s g as) = PlanningTask nfacts showfact as' s' g' NoConstraint (oldMGs ++ newMGs)
+fromSAS :: (Constraints c) => SAS -> c ByteString -> PlanningTask c
+fromSAS sas constraints = PlanningTask nFacts showFact actions initial goal constraints' (oldMGs ++ newMGs)
   where
-    nfacts = perfectHash sas Vec.! SAS.nVars sas
-    showfact fact = SAS.showFact sas $ inverseHash sas nfacts Vec.! fact
-    as' = map (convertAction sas) as
-    s' = convertFacts sas (zip [0 ..] s)
-    g' = convertFacts sas g
-    oldMGs = map (convertFacts sas) mgs
+    nFacts = SAS.nFacts sas
+    showFact (Fact fact) = SAS.showFact sas $ inverseHash sas nFacts Vec.! fact
+    actions = map (convertAction sas) $ SAS.actions sas
+    initial = convertFacts sas (zip [0 ..] $ SAS.initialState sas)
+    goal = convertFacts sas $ SAS.goal sas
+    constraints' = fmap (convertFact sas . SAS.nameToFact sas) constraints
+    oldMGs = map (MutexGroup . convertFacts sas) $ SAS.mutexGroups sas
     newMGs =
-      [ [convertFact sas (var, val) | val <- [0 .. SAS.domainSize sas var - 1]]
+      [ MutexGroup [convertFact sas (var, val) | val <- [0 .. SAS.domainSize sas var - 1]]
         | var <- [0 .. SAS.nVars sas - 1]
       ]

@@ -26,8 +26,9 @@ library
   exposed-modules:
       Constraints
       LTL
-      ParsePDDLConstraint
+      ParsePDDLConstraints
       ParseSAS
+      PDDLConstraints
       PlanningTask
       SAS
       SAT

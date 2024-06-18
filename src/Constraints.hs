@@ -1,51 +1,23 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE TupleSections #-}
 
 module Constraints
   ( NoConstraint (..),
-    PDDLConstraint (..),
-    PDDLConstraints (..),
-    singleHard,
-    singleSoft,
     Constraints (..),
+    sometimeBetween,
+    alwaysBetween,
+    atMostOneVariables,
+    defineAtMostOneVariables,
+    atMostOne,
   )
 where
 
-import Data.Map (Map)
+import Data.ByteString.Char8 (ByteString)
+import qualified Data.ByteString.Char8 as C8
+import Data.Map (Map, (!))
+import qualified Data.Map as Map
 import qualified Ersatz as E
-import Types (Fact, Time, Variable)
-
-data NoConstraint c = NoConstraint
-  deriving (Functor)
-
-data PDDLConstraint c
-  = AtEnd c
-  | Always c
-  | Sometime c
-  | Within Int c
-  | AtMostOnce c
-  | SometimeAfter c c
-  | SometimeBefore c c
-  | AlwaysWithin Int c c
-  | HoldDuring Int Int c
-  | HoldAfter Int c
-  deriving (Show, Functor)
-
-data PDDLConstraints c = PDDLConstraints
-  { hardConstraints :: [PDDLConstraint c],
-    softConstraints :: [PDDLConstraint c]
-  }
-  deriving (Functor)
-
-instance Semigroup (PDDLConstraints c) where
-  PDDLConstraints hc1 sc1 <> PDDLConstraints hc2 sc2 =
-    PDDLConstraints (hc1 <> hc2) (sc1 <> sc2)
-
-instance Monoid (PDDLConstraints c) where
-  mempty = PDDLConstraints mempty mempty
-
-singleHard, singleSoft :: PDDLConstraint a -> PDDLConstraints a
-singleHard c = PDDLConstraints [c] []
-singleSoft c = PDDLConstraints [] [c]
+import Types (Fact, Time, Variable (FactV))
 
 -- This class captures the functionallity that is requires for constraints.
 -- The instance of the functor class ensures that the facts of constraints (which are typically read as bytestrings),
@@ -53,12 +25,37 @@ singleSoft c = PDDLConstraints [] [c]
 class (Functor c) => Constraints c where
   constraintsToSat :: c Fact -> Time -> Map Variable E.Bit -> E.Bit
 
+  defineExtraVariables :: (E.MonadSAT s m) => c Fact -> Time -> m (Map Variable E.Bit)
+
+  showConstraints :: (a -> ByteString) -> c a -> ByteString
+
+data NoConstraint c = NoConstraint
+  deriving (Functor)
+
 instance Constraints NoConstraint where
   constraintsToSat _ _ _ = E.true
+  defineExtraVariables _ _ = return Map.empty
+  showConstraints _ NoConstraint = C8.pack "No constraints"
 
--- TODO: implement
-instance Constraints PDDLConstraint
+sometimeBetween :: Time -> Time -> Fact -> Map Variable E.Bit -> E.Bit
+sometimeBetween t1 t2 f v = E.or [v ! FactV t f | t <- [t1 .. t2]]
 
--- TODO: What with soft constraints?
-instance Constraints PDDLConstraints where
-  constraintsToSat (PDDLConstraints hc sc) t v = E.and $ map (\c -> constraintsToSat c t v) hc
+alwaysBetween :: Time -> Time -> Fact -> Map Variable E.Bit -> E.Bit
+alwaysBetween t1 t2 f v = E.and [v ! FactV t f | t <- [t1 .. t2]]
+
+-- for the following functions the first argument is expected to be either atMostOnceV f or atMostOneActionV t
+atMostOneVariables :: (Int -> Variable) -> Int -> [Variable]
+atMostOneVariables toAMOVariable nOptions = [toAMOVariable i | i <- [0 .. n - 1]]
+  where
+    n = ceiling (logBase 2 $ fromIntegral nOptions :: Double)
+
+defineAtMostOneVariables :: (E.MonadSAT s m) => (Int -> Variable) -> Int -> m (Map Variable E.Bit)
+defineAtMostOneVariables nOptions toAMOVariable =
+  sequence $ Map.fromList $ map (,E.exists) $ atMostOneVariables nOptions toAMOVariable
+
+atMostOne :: (Int -> Variable) -> [Variable] -> Map Variable E.Bit -> E.Bit
+atMostOne toAmoVariable vars v = E.and $ zipWith constr [0 ..] vars
+  where
+    amoVars = atMostOneVariables toAmoVariable (length vars)
+    bits = E.Bits $ map (v !) amoVars
+    constr idx var = v ! var E.==> (bits E.=== E.encode idx)

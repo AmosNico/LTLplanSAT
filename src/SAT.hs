@@ -1,29 +1,22 @@
 {-# LANGUAGE TupleSections #-}
 
-module SAT (solve, Plan) where
+module SAT (solve) where
 
-import Data.Bits (bit, (.&.))
+import Constraints (Constraints (constraintsToSat), atMostOne, atMostOneVariables)
 import Data.List ((\\))
 import Data.Map (Map, (!))
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
 import qualified Ersatz as E
+import PlanningTask
 import Types
-import Constraints (Constraints (constraintsToSat))
-
-numberAtMostOneV :: PlanningTask c -> Int
-numberAtMostOneV pt = ceiling (logBase 2 $ fromIntegral $ ptNumberActions pt :: Double)
-
-actionToInt :: PlanningTask c -> Action -> Int
-actionToInt pt a = Map.fromList (zip (ptActions pt) [0 ..]) Map.! a
 
 defineVariables :: (E.MonadSAT s m) => PlanningTask c -> Time -> m (Map Variable E.Bit)
-defineVariables pt k = sequence $ Map.fromList list
+defineVariables pt k = sequence $ Map.fromList $ map (,E.exists) (actionVars ++ factVars ++ amoVars)
   where
-    list = map (,E.exists) (actionVars ++ factVars ++ amoVars)
     actionVars = [ActionV t a | a <- ptActions pt, t <- [1 .. k]]
     factVars = [FactV t f | f <- ptFacts pt, t <- [0 .. k]]
-    amoVars = [AtMostOneV t i | i <- [0 .. numberAtMostOneV pt], t <- [1 .. k]]
+    amoVars = concat [atMostOneVariables (AtMostOneActionV t) (ptNumberActions pt) | t <- [0 .. k]]
 
 initialToSAT :: PlanningTask c -> Map Variable E.Bit -> E.Bit
 initialToSAT pt v = E.and $ pos ++ neg
@@ -42,7 +35,7 @@ actionToSAT a t v = E.and $ pre ++ add ++ del
     del = map (\f -> v ! ActionV t a E.==> E.not (v ! FactV t f)) $ actionDel a
 
 mutexToSAT :: MutexGroup -> Time -> Map Variable E.Bit -> E.Bit
-mutexToSAT mg t v = E.or $ map (\f -> v ! FactV t f) mg
+mutexToSAT (MutexGroup facts) t v = E.or $ map (\f -> v ! FactV t f) facts
 
 frameAxioms :: PlanningTask c -> Fact -> Time -> Map Variable E.Bit -> E.Bit
 frameAxioms pt f t v = frame1 E.&& frame2
@@ -52,23 +45,8 @@ frameAxioms pt f t v = frame1 E.&& frame2
     fInDel = filter (\a -> f `elem` actionDel a) $ ptActions pt
     frame2 = E.or $ [E.not $ v ! FactV (t - 1) f, v ! FactV t f] ++ map (\f' -> v ! ActionV t f') fInDel
 
--- Is the next one better?
-atMostOne' :: PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit
-atMostOne' pt t v = E.and [constr a i | a <- ptActions pt, i <- [0 .. numberAtMostOneV pt - 1]]
-  where
-    n a i = (if actionToInt pt a .&. bit i == bit i then id else E.not) $ v ! AtMostOneV t i
-    constr a i = v ! ActionV t a E.==> n a i
-
--- Use the variables "AtMostOneV t i" for i = 0..n to
-atMostOne :: PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit
-atMostOne pt t v = E.and [constr a | a <- ptActions pt]
-  where
-    constr a = v ! ActionV t a E.==> (bits E.=== encodeAction a)
-    bits = E.Bits [v ! AtMostOneV t i | i <- [0 .. numberAtMostOneV pt - 1]]
-    encodeAction a = E.encode (toInteger $ actionToInt pt a)
-
 -- k is the maximum number of timesteps in the SAT encoding
-ptToSAT :: Constraints c => PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit
+ptToSAT :: (Constraints c) => PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit
 ptToSAT pt k v =
   E.and
     [ initialToSAT pt v,
@@ -77,7 +55,7 @@ ptToSAT pt k v =
       E.and [frameAxioms pt f t v | f <- ptFacts pt, t <- [1 .. k]],
       constraintsToSat (ptConstraints pt) k v,
       E.and [mutexToSAT mg t v | mg <- ptMutexGroups pt, t <- [0 .. k]],
-      E.and [atMostOne pt t v | t <- [1 .. k]]
+      E.and [atMostOne (AtMostOneActionV t) [ActionV t a | a <- ptActions pt] v | t <- [1 .. k]]
     ]
 
 extractPlan :: PlanningTask c -> Time -> Map Variable Bool -> Plan
@@ -96,13 +74,13 @@ extractPlan pt k v = Plan $ mapMaybe extractAction [1 .. k]
             ++ show l
             ++ "."
 
-callSAT :: Constraints c => PlanningTask c -> Time -> IO (E.Result, Maybe (Map Variable Bool))
+callSAT :: (Constraints c) => PlanningTask c -> Time -> IO (E.Result, Maybe (Map Variable Bool))
 callSAT pt k = E.solveWith E.cryptominisat5 $ do
   vars <- defineVariables pt k
   E.assert $ ptToSAT pt k vars
   return vars
 
-iterativeSolve :: Constraints c => PlanningTask c -> Time -> IO Plan
+iterativeSolve :: (Constraints c) => PlanningTask c -> Time -> IO Plan
 iterativeSolve pt k = do
   putStrLn $ "Calling the SAT-solver with maximal plan length " ++ show k ++ "."
   (res, mSolution) <- callSAT pt k
@@ -113,6 +91,6 @@ iterativeSolve pt k = do
       Nothing -> error "The SAT-solver said the planning problem is solvable, but did not return a solution."
       Just solution -> return $ extractPlan pt k solution
 
-solve :: Constraints c => PlanningTask c -> IO Plan
+solve :: (Constraints c) => PlanningTask c -> IO Plan
 solve pt = do
   iterativeSolve pt 5

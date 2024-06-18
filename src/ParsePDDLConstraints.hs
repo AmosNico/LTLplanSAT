@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module ParsePDDLConstraint (parsePDDLConstraints) where
+module ParsePDDLConstraints (parsePDDLConstraints) where
 
-import Constraints (PDDLConstraint (..), PDDLConstraints (..), singleHard, singleSoft)
+import PDDLConstraints (PDDLConstraint (..), PDDLConstraints (..), singleHard, singleSoft)
 import Control.Monad (void)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
@@ -43,7 +43,7 @@ parsePredicate = parens $ do
   name <- parseName
   space1
   args <- some (parseName <* pSpace)
-  return $ C8.pack $ name ++ "(" ++ intercalate ", " args ++ ")"
+  return $ C8.pack $ "Atom " ++ name ++ "(" ++ intercalate ", " args ++ ")"
 
 pKey :: Input -> Parser Input
 pKey keyword = string keyword <* pSpace
@@ -93,7 +93,7 @@ parseDefineBlock = parseBlock "define" $ many $ try parseConstraintsBlock <|> (m
 parseConstraints :: Parser Constraints
 parseConstraints = pSpace *> (mconcat <$> parseDefineBlock) <* eof
 
-parsePDDLConstraints :: FilePath -> IO Constraints
+parsePDDLConstraints :: FilePath -> IO (PDDLConstraints ByteString)
 parsePDDLConstraints path = do
   content <- TextIO.readFile path
   case parseMaybe parseConstraints content of
