@@ -43,7 +43,7 @@ sometimeBetween t1 t2 f v = E.or [v ! FactV t f | t <- [t1 .. t2]]
 alwaysBetween :: Time -> Time -> Fact -> Map Variable E.Bit -> E.Bit
 alwaysBetween t1 t2 f v = E.and [v ! FactV t f | t <- [t1 .. t2]]
 
--- for the following functions the first argument is expected to be either atMostOnceV f or atMostOneActionV t
+-- For the following functions the first argument is expected to be either atMostOnceV fact or atMostOneActionV time.
 atMostOneVariables :: (Int -> Variable) -> Int -> [Variable]
 atMostOneVariables toAMOVariable nOptions = [toAMOVariable i | i <- [0 .. n - 1]]
   where

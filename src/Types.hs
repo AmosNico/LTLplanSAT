@@ -14,7 +14,8 @@ import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Data.List (intercalate)
 
-newtype Fact = Fact Int deriving (Eq, Ord, Show)
+--newtype Fact = Fact Int deriving (Eq, Ord, Show)
+newtype Fact = Fact ByteString deriving (Eq, Ord, Show)
 
 newtype MutexGroup = MutexGroup [Fact]
 

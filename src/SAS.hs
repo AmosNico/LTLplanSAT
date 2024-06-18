@@ -9,18 +9,16 @@ module SAS
     domainSize,
     variable,
     nVars,
-    showFact,
     perfectHash,
-    nFacts,
-    nameToFact
+    numberFacts,
+    factName,
+    facts,
   )
 where
 
 import Data.ByteString (ByteString)
-import qualified Data.ByteString.Char8 as C8
 import Data.Vector (Vector)
 import qualified Data.Vector as Vec
-import qualified Data.Map as Map
 
 data Variable = Var
   { varName :: ByteString,
@@ -70,19 +68,11 @@ perfectHash sas = Vec.unfoldrExactN (SAS.nVars sas + 1) f (0, 0)
     -- while remembering number of the variable and hash value
     f (var, hash) = (hash, (var + 1, hash + SAS.domainSize sas var))
 
-nFacts :: SAS -> Int
-nFacts sas = perfectHash sas Vec.! SAS.nVars sas
+numberFacts :: SAS -> Int
+numberFacts sas = perfectHash sas Vec.! SAS.nVars sas
 
-nameFact :: SAS -> Fact -> ByteString
-nameFact sas (var, val) = varValues (variable sas var) Vec.! val
-
-showFact :: SAS -> Fact -> ByteString
-showFact sas (var, val) =
-  C8.concat
-    [varName (variables sas Vec.! var), C8.pack " = ", nameFact sas (var, val)]
+factName :: SAS -> Fact -> ByteString
+factName sas (var, val) = varValues (variable sas var) Vec.! val
 
 facts :: SAS -> [Fact]
-facts sas = [(var, val) | var <- [0..nVars sas - 1], val <- [0.. domainSize sas var - 1]]
-
-nameToFact :: SAS -> ByteString -> Fact
-nameToFact sas varval = Map.fromList (map (\f -> (nameFact sas f, f)) $ facts sas) Map.! varval
+facts sas = [(var, val) | var <- [0 .. nVars sas - 1], val <- [0 .. domainSize sas var - 1]]

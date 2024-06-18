@@ -2,5 +2,5 @@
 bin/
 dist-newstyle/
 output.sas
-commands.txt
+*.txt
 *~

@@ -1,9 +1,10 @@
 module PlanningTask
   ( PlanningTask (..),
-    ptFacts,
+    ptNumberFacts,
     ptNumberActions,
-    ptShowFacts,
-    ptShowAction,
+    showFact,
+    showFacts,
+    showAction,
     printPlanningTask,
     fromSAS,
   )
@@ -13,15 +14,12 @@ import Constraints (Constraints (showConstraints))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Data.List (find)
-import Data.Vector (Vector)
-import qualified Data.Vector as Vec
 import SAS (SAS)
 import qualified SAS
 import Types (Action (Action), Fact (Fact), Goal, MutexGroup (MutexGroup), State)
 
 data PlanningTask constraintType = PlanningTask
-  { ptNumberFacts :: Int,
-    ptShowFact :: Fact -> ByteString,
+  { ptFacts :: [Fact],
     ptActions :: [Action],
     ptInitalState :: State,
     ptGoal :: Goal,
@@ -29,27 +27,30 @@ data PlanningTask constraintType = PlanningTask
     ptMutexGroups :: [MutexGroup]
   }
 
-ptFacts :: PlanningTask a -> [Fact]
-ptFacts pt = map Fact [0 .. ptNumberFacts pt - 1]
+ptNumberFacts :: PlanningTask a -> Int
+ptNumberFacts pt = length $ ptFacts pt
 
 ptNumberActions :: PlanningTask a -> Int
 ptNumberActions pt = length $ ptActions pt
 
-ptShowFacts :: PlanningTask a -> [Fact] -> ByteString
-ptShowFacts pt fs = C8.intercalate (C8.pack ", ") $ map (ptShowFact pt) fs
+showFact :: Fact -> ByteString
+showFact (Fact fact) = fact
 
-ptShowAction :: PlanningTask a -> Action -> ByteString
-ptShowAction pt (Action name pre add del cost) =
+showFacts :: [Fact] -> ByteString
+showFacts fs = C8.intercalate (C8.pack ", ") $ map showFact fs
+
+showAction :: Action -> ByteString
+showAction (Action name pre add del cost) =
   C8.concat
     [ name,
       C8.pack " (cost ",
       C8.pack (show cost),
       C8.pack "): \n  pre = {",
-      ptShowFacts pt pre,
+      showFacts pre,
       C8.pack "}, \n  post = {",
-      ptShowFacts pt add,
+      showFacts add,
       C8.pack "}, \n  del = {",
-      ptShowFacts pt del,
+      showFacts del,
       C8.pack "}"
     ]
 
@@ -60,31 +61,23 @@ printPlanningTask pt =
       [ C8.pack "There are ",
         C8.pack (show (ptNumberFacts pt)),
         C8.pack " facts:\n",
-        ptShowFacts pt (ptFacts pt),
+        showFacts (ptFacts pt),
         C8.pack "\nActions:\n",
-        C8.unlines (map (ptShowAction pt) (ptActions pt)),
+        C8.unlines (map showAction (ptActions pt)),
         C8.pack "Initial state:\n",
-        C8.unlines $ map (ptShowFact pt) (ptInitalState pt),
+        C8.unlines $ map showFact (ptInitalState pt),
         C8.pack "Goal:\n",
-        ptShowFacts pt (ptGoal pt),
-        showConstraints (ptShowFact pt) (ptConstraints pt),
+        showFacts (ptGoal pt),
+        showConstraints showFact (ptConstraints pt),
         C8.pack "\nMutex Groups:\n",
-        C8.unlines (map (ptShowFacts pt . \(MutexGroup facts) -> facts) (ptMutexGroups pt))
+        C8.unlines (map (showFacts . \(MutexGroup facts) -> facts) (ptMutexGroups pt))
       ]
 
 convertFact :: SAS -> SAS.Fact -> Fact
-convertFact sas (var, val) = Fact $ (SAS.perfectHash sas Vec.! var) + val
+convertFact sas fact = Fact $ SAS.factName sas fact
 
 convertFacts :: SAS -> [SAS.Fact] -> [Fact]
 convertFacts sas = map (convertFact sas)
-
-inverseHash :: SAS -> Int -> Vector SAS.Fact
-inverseHash sas nFacts = Vec.unfoldrExactN nFacts f (0, 0)
-  where
-    f (var, val) =
-      if val + 1 == SAS.domainSize sas var
-        then ((var, val), (var + 1, 0))
-        else ((var, val), (var, val + 1))
 
 deletingEffects :: SAS -> SAS.Action -> [Fact]
 deletingEffects sas a = concatMap f (SAS.actionPost a)
@@ -104,14 +97,13 @@ convertAction sas a@(SAS.Action name pre post c) = Action name pre' add del c
     del = deletingEffects sas a
 
 fromSAS :: (Constraints c) => SAS -> c ByteString -> PlanningTask c
-fromSAS sas constraints = PlanningTask nFacts showFact actions initial goal constraints' (oldMGs ++ newMGs)
+fromSAS sas constraints = PlanningTask facts actions initial goal constraints' (oldMGs ++ newMGs)
   where
-    nFacts = SAS.nFacts sas
-    showFact (Fact fact) = SAS.showFact sas $ inverseHash sas nFacts Vec.! fact
+    facts = convertFacts sas $ SAS.facts sas
     actions = map (convertAction sas) $ SAS.actions sas
     initial = convertFacts sas (zip [0 ..] $ SAS.initialState sas)
     goal = convertFacts sas $ SAS.goal sas
-    constraints' = fmap (convertFact sas . SAS.nameToFact sas) constraints
+    constraints' = fmap Fact constraints
     oldMGs = map (MutexGroup . convertFacts sas) $ SAS.mutexGroups sas
     newMGs =
       [ MutexGroup [convertFact sas (var, val) | val <- [0 .. SAS.domainSize sas var - 1]]
