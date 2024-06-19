@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Types
   ( Atom (..),
     showAtom,
@@ -8,7 +10,7 @@ module Types
     negateFact,
     isPosAtom,
     factToAtom,
-    MutexGroup(MutexGroup),
+    MutexGroup (MutexGroup),
     State,
     Goal,
     Action (..),
@@ -16,6 +18,7 @@ module Types
     Time,
     Variable (..),
     Plan (..),
+    writePlan,
   )
 where
 
@@ -23,7 +26,6 @@ import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Data.List (intercalate)
 
---newtype Fact = Fact Int deriving (Eq, Ord, Show)
 newtype Atom = Atom ByteString deriving (Eq, Ord, Show)
 
 showAtom :: Atom -> ByteString
@@ -71,13 +73,13 @@ showAction :: Action -> ByteString
 showAction (Action name pre post cost) =
   C8.concat
     [ name,
-      C8.pack " (cost ",
+      " (cost ",
       C8.pack (show cost),
-      C8.pack "): \n  pre = {",
+      "): \n  pre = {",
       showFacts pre,
-      C8.pack "}: \n  post = {",
+      "}: \n  post = {",
       showFacts post,
-      C8.pack "}"
+      "}"
     ]
 
 instance Show Action where
@@ -89,6 +91,12 @@ data Variable = ActionV Time Action | AtomV Time Atom | AtMostOneActionV Time In
   deriving (Eq, Ord)
 
 newtype Plan = Plan [Action]
+
+writePlan :: Plan -> IO ()
+writePlan (Plan as) =
+  C8.writeFile "plan.txt" $
+    C8.concat $
+      map (\a -> C8.concat ["(", actionName a, ")\n"]) as
 
 instance Show Plan where
   show (Plan as) =

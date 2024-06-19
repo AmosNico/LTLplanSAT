@@ -37,9 +37,9 @@ frameAxioms :: PlanningTask c -> Atom -> Time -> Map Variable E.Bit -> E.Bit
 frameAxioms pt atom t v = frame1 E.&& frame2
   where
     fInAdd = filter (\a -> PosAtom atom `elem` actionPost a) $ ptActions pt
-    frame1 = E.or $ [value v (t - 1) $ PosAtom atom, value v t $ NegAtom atom] ++ map (\f' -> v ! ActionV t f') fInAdd
+    frame1 = E.or $ [value v (t - 1) $ PosAtom atom, value v t $ NegAtom atom] ++ map (\a -> v ! ActionV t a) fInAdd
     fInDel = filter (\a -> NegAtom atom `elem` actionPost a) $ ptActions pt
-    frame2 = E.or $ [value v (t - 1) $ NegAtom atom, value v t $ PosAtom atom] ++ map (\f' -> v ! ActionV t f') fInDel
+    frame2 = E.or $ [value v (t - 1) $ NegAtom atom, value v t $ PosAtom atom] ++ map (\a -> v ! ActionV t a) fInDel
 
 -- k is the maximum number of timesteps in the SAT encoding
 ptToSAT :: (Constraints c) => PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit

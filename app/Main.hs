@@ -5,23 +5,30 @@ module Main (main) where
 import Constraints (Constraints, NoConstraint (..))
 import Control.Exception (SomeException, catch)
 import Control.Monad (unless, void)
-import Data.ByteString (ByteString)
 import ParsePDDLConstraints (parsePDDLConstraints)
 import ParseSAS (readSAS)
 import PlanningTask (fromSAS, printPlanningTask)
 import SAT (solve)
 import System.Environment (getArgs)
-import System.Process (readProcess)
+import System.Process (readProcess, callProcess)
 import Text.Read (readMaybe)
+import Types (Plan, writePlan)
 
-solveSAS :: (Constraints c) => FilePath -> c -> IO ()
+solveSAS :: (Constraints c) => FilePath -> c -> IO Plan
 solveSAS path constraints = do
   sas <- readSAS path
   putStrLn "Translating to STRIPS."
   let pt = fromSAS sas constraints
-  printPlanningTask pt
+  -- printPlanningTask pt
   plan <- solve pt
   print plan
+  return plan
+
+validatePlan :: FilePath -> FilePath -> Plan -> IO ()
+validatePlan domain problem plan = do
+  putStrLn "Checking the plan using Val."
+  writePlan plan
+  callProcess "Val\\bin\\validate.exe" [domain, problem, "plan.txt"]
 
 solvePDDL :: FilePath -> FilePath -> IO ()
 solvePDDL domain problem = do
@@ -29,7 +36,8 @@ solvePDDL domain problem = do
   void $ readProcess "python" ["src\\translate\\translate.py", "--keep-unimportant-variables", domain, problem] ""
   putStrLn "Translation to SAS succeded."
   constraints <- parsePDDLConstraints problem
-  solveSAS "output.sas" constraints
+  plan <- solveSAS "output.sas" constraints
+  validatePlan domain problem plan
 
 exampleRover :: Int -> IO ()
 exampleRover n =
@@ -40,7 +48,7 @@ exampleRover n =
     version = if n < 10 then "0" ++ show n else show n
 
 exampleAirport :: Int -> IO ()
-exampleAirport n = solveSAS ("examples SAS\\" ++ show n ++ ".in") NoConstraint
+exampleAirport n = void $ solveSAS ("examples SAS\\" ++ show n ++ ".in") NoConstraint
 
 description :: String
 description =
@@ -74,7 +82,7 @@ handleCommand command = case words command of
       putStrLn $
         "Expected an integer between 1 and 20, but got " ++ s ++ "."
     Just n -> exampleRover n
-  ["sas", path] -> solveSAS path NoConstraint
+  ["sas", path] -> void $ solveSAS path NoConstraint
   ["airport", s] -> case readInRange 1 4 s of
     Nothing ->
       putStrLn $
@@ -95,7 +103,7 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    [domain, problem] -> solvePDDL domain problem
+    [domain, problem] -> void $ solvePDDL domain problem
     _ -> do
       putStrLn "Welcome to LTLplanSAT"
       putStrLn description

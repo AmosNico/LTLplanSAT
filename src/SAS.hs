@@ -8,7 +8,7 @@ module SAS
     SAS (..),
     domainSize,
     variable,
-    nVars,
+    numberVariables,
     perfectHash,
     numberFacts,
     factName,
@@ -57,22 +57,22 @@ variable sas var = variables sas Vec.! var
 domainSize :: SAS -> Int -> Int
 domainSize sas var = length $ varValues (variable sas var)
 
-nVars :: SAS -> Int
-nVars sas = length $ variables sas
+numberVariables :: SAS -> Int
+numberVariables sas = length $ variables sas
 
 -- Compute the hash of v = 0 for all SAS variables v. The last element is the number of facts
 perfectHash :: SAS -> Vector Int
-perfectHash sas = Vec.unfoldrExactN (SAS.nVars sas + 1) f (0, 0)
+perfectHash sas = Vec.unfoldrExactN (numberVariables sas + 1) f (0, 0)
   where
     -- f iterates through all variables v and computes the hash for v = 0,
     -- while remembering number of the variable and hash value
-    f (var, hash) = (hash, (var + 1, hash + SAS.domainSize sas var))
+    f (var, hash) = (hash, (var + 1, hash + domainSize sas var))
 
 numberFacts :: SAS -> Int
-numberFacts sas = perfectHash sas Vec.! SAS.nVars sas
+numberFacts sas = perfectHash sas Vec.! numberVariables sas
 
 factName :: SAS -> Fact -> ByteString
 factName sas (var, val) = varValues (variable sas var) Vec.! val
 
 facts :: SAS -> [Fact]
-facts sas = [(var, val) | var <- [0 .. nVars sas - 1], val <- [0 .. domainSize sas var - 1]]
+facts sas = [(var, val) | var <- [0 .. numberVariables sas - 1], val <- [0 .. domainSize sas var - 1]]
