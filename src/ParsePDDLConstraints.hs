@@ -4,7 +4,6 @@ module ParsePDDLConstraints (parsePDDLConstraints) where
 
 import PDDLConstraints (PDDLConstraint (..), PDDLConstraints (..), singleHard, singleSoft)
 import Control.Monad (void)
-import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Data.List (intercalate)
 import Data.Text (Text)
@@ -14,10 +13,7 @@ import Text.Megaparsec (Parsec, between, choice, empty, eof, many, noneOf, parse
 import Text.Megaparsec.Char (alphaNumChar, char, space1, string)
 import Text.Megaparsec.Char.Lexer (decimal, skipLineComment, space, symbol)
 import Text.Megaparsec.Stream (Token)
-
-type Constraint = PDDLConstraint ByteString
-
-type Constraints = PDDLConstraints ByteString
+import Types (Fact (PosAtom), Atom (Atom))
 
 type Input = Text
 
@@ -38,17 +34,17 @@ someBut l = some $ noneOf l
 parseName :: Parser [Token Input]
 parseName = some (alphaNumChar <|> char '_')
 
-parsePredicate :: Parser ByteString
+parsePredicate :: Parser Fact
 parsePredicate = parens $ do
   name <- parseName
   space1
   args <- some (parseName <* pSpace)
-  return $ C8.pack $ "Atom " ++ name ++ "(" ++ intercalate ", " args ++ ")"
+  return $ PosAtom $ Atom $ C8.pack $ name ++ "(" ++ intercalate ", " args ++ ")"
 
 pKey :: Input -> Parser Input
 pKey keyword = string keyword <* pSpace
 
-parsePDDLConstraint :: Parser Constraint
+parsePDDLConstraint :: Parser PDDLConstraint
 parsePDDLConstraint =
   parens
     ( choice
@@ -66,13 +62,13 @@ parsePDDLConstraint =
         <?> "constraint"
     )
 
-parseSoftConstraint :: Parser Constraints
+parseSoftConstraint :: Parser PDDLConstraints
 parseSoftConstraint = singleSoft <$> (pKey "preference" *> some alphaNumChar *> pSpace *> parsePDDLConstraint)
 
-parseHardConstraint :: Parser Constraints
+parseHardConstraint :: Parser PDDLConstraints
 parseHardConstraint = singleHard <$> parsePDDLConstraint
 
-parseConstraint :: Parser Constraints
+parseConstraint :: Parser PDDLConstraints
 parseConstraint = parens (parseSoftConstraint <|> parseHardConstraint)
 
 skipBlock :: Parser ()
@@ -81,19 +77,19 @@ skipBlock = void $ parens $ many (void (someBut "()") <|> skipBlock <?> "skippin
 parseBlock :: Input -> Parser a -> Parser a
 parseBlock keyword pInner = parens (string keyword *> pSpace *> pInner <?> show keyword)
 
-parseAndBlock :: Parser Constraints
+parseAndBlock :: Parser PDDLConstraints
 parseAndBlock = parseBlock "and" (mconcat <$> many parseConstraint)
 
-parseConstraintsBlock :: Parser Constraints
+parseConstraintsBlock :: Parser PDDLConstraints
 parseConstraintsBlock = parseBlock ":constraints" $ try parseAndBlock <|> parseConstraint
 
-parseDefineBlock :: Parser [Constraints]
+parseDefineBlock :: Parser [PDDLConstraints]
 parseDefineBlock = parseBlock "define" $ many $ try parseConstraintsBlock <|> (mempty <$ skipBlock)
 
-parseConstraints :: Parser Constraints
+parseConstraints :: Parser PDDLConstraints
 parseConstraints = pSpace *> (mconcat <$> parseDefineBlock) <* eof
 
-parsePDDLConstraints :: FilePath -> IO (PDDLConstraints ByteString)
+parsePDDLConstraints :: FilePath -> IO PDDLConstraints
 parsePDDLConstraints path = do
   content <- TextIO.readFile path
   case parseMaybe parseConstraints content of

@@ -1,9 +1,9 @@
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE TupleSections #-}
 
 module Constraints
   ( NoConstraint (..),
     Constraints (..),
+    value,
     sometimeBetween,
     alwaysBetween,
     atMostOneVariables,
@@ -17,31 +17,34 @@ import qualified Data.ByteString.Char8 as C8
 import Data.Map (Map, (!))
 import qualified Data.Map as Map
 import qualified Ersatz as E
-import Types (Fact, Time, Variable (FactV))
+import Types (Fact (..), Time, Variable (AtomV))
 
 -- This class captures the functionallity that is requires for constraints.
 -- The instance of the functor class ensures that the facts of constraints (which are typically read as bytestrings),
 -- can be transformed into the integers that PlanningTask uses.
-class (Functor c) => Constraints c where
-  constraintsToSat :: c Fact -> Time -> Map Variable E.Bit -> E.Bit
+class Constraints c where
+  constraintsToSat :: c -> Time -> Map Variable E.Bit -> E.Bit
 
-  defineExtraVariables :: (E.MonadSAT s m) => c Fact -> Time -> m (Map Variable E.Bit)
+  defineExtraVariables :: (E.MonadSAT s m) => c -> Time -> m (Map Variable E.Bit)
 
-  showConstraints :: (a -> ByteString) -> c a -> ByteString
+  showConstraints :: c -> ByteString
 
-data NoConstraint c = NoConstraint
-  deriving (Functor)
+data NoConstraint = NoConstraint
 
 instance Constraints NoConstraint where
   constraintsToSat _ _ _ = E.true
   defineExtraVariables _ _ = return Map.empty
-  showConstraints _ NoConstraint = C8.pack "No constraints"
+  showConstraints NoConstraint = C8.pack "No constraints"
+
+value :: Map Variable E.Bit -> Time -> Fact -> E.Bit
+value v t (PosAtom atom) = v ! AtomV t atom
+value v t (NegAtom atom) = E.not $ v ! AtomV t atom
 
 sometimeBetween :: Time -> Time -> Fact -> Map Variable E.Bit -> E.Bit
-sometimeBetween t1 t2 f v = E.or [v ! FactV t f | t <- [t1 .. t2]]
+sometimeBetween t1 t2 f v = E.or [value v t f | t <- [t1 .. t2]]
 
 alwaysBetween :: Time -> Time -> Fact -> Map Variable E.Bit -> E.Bit
-alwaysBetween t1 t2 f v = E.and [v ! FactV t f | t <- [t1 .. t2]]
+alwaysBetween t1 t2 f v = E.and [value v t f | t <- [t1 .. t2]]
 
 -- For the following functions the first argument is expected to be either atMostOnceV fact or atMostOneActionV time.
 atMostOneVariables :: (Int -> Variable) -> Int -> [Variable]

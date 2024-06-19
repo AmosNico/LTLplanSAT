@@ -2,8 +2,7 @@
 
 module SAT (solve) where
 
-import Constraints (Constraints (constraintsToSat), atMostOne, atMostOneVariables)
-import Data.List ((\\))
+import Constraints (Constraints (constraintsToSat), atMostOne, atMostOneVariables, value)
 import Data.Map (Map, (!))
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
@@ -15,35 +14,32 @@ defineVariables :: (E.MonadSAT s m) => PlanningTask c -> Time -> m (Map Variable
 defineVariables pt k = sequence $ Map.fromList $ map (,E.exists) (actionVars ++ factVars ++ amoVars)
   where
     actionVars = [ActionV t a | a <- ptActions pt, t <- [1 .. k]]
-    factVars = [FactV t f | f <- ptFacts pt, t <- [0 .. k]]
+    factVars = [AtomV t atom | atom <- ptAtoms pt, t <- [0 .. k]]
     amoVars = concat [atMostOneVariables (AtMostOneActionV t) (ptNumberActions pt) | t <- [0 .. k]]
 
 initialToSAT :: PlanningTask c -> Map Variable E.Bit -> E.Bit
-initialToSAT pt v = E.and $ pos ++ neg
-  where
-    pos = map (\f -> v ! FactV 0 f) $ ptInitalState pt
-    neg = map (\f -> E.not $ v ! FactV 0 f) $ ptFacts pt \\ ptInitalState pt
+initialToSAT pt v = E.and $ map (value v 0) $ ptInitalState pt
 
 goalToSAT :: PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit
-goalToSAT pt k v = E.and $ map (\f -> v ! FactV k f) $ ptGoal pt
+goalToSAT pt k v = E.and $ map (value v k) $ ptGoal pt
 
 actionToSAT :: Action -> Time -> Map Variable E.Bit -> E.Bit
-actionToSAT a t v = E.and $ pre ++ add ++ del
+actionToSAT a t v = E.and $ pre ++ add
   where
-    pre = map (\f -> v ! ActionV t a E.==> v ! FactV (t - 1) f) $ actionPre a
-    add = map (\f -> v ! ActionV t a E.==> v ! FactV t f) $ actionAdd a
-    del = map (\f -> v ! ActionV t a E.==> E.not (v ! FactV t f)) $ actionDel a
+    pre = map (\f -> v ! ActionV t a E.==> value v (t - 1) f) $ actionPre a
+    add = map (\f -> v ! ActionV t a E.==> value v t f) $ actionPost a
 
+-- TODO: Mutexes, not invariants
 mutexToSAT :: MutexGroup -> Time -> Map Variable E.Bit -> E.Bit
-mutexToSAT (MutexGroup facts) t v = E.or $ map (\f -> v ! FactV t f) facts
+mutexToSAT (MutexGroup facts) t v = E.true -- E.or $ map (value v t) facts
 
-frameAxioms :: PlanningTask c -> Fact -> Time -> Map Variable E.Bit -> E.Bit
-frameAxioms pt f t v = frame1 E.&& frame2
+frameAxioms :: PlanningTask c -> Atom -> Time -> Map Variable E.Bit -> E.Bit
+frameAxioms pt atom t v = frame1 E.&& frame2
   where
-    fInAdd = filter (\a -> f `elem` actionAdd a) $ ptActions pt
-    frame1 = E.or $ [v ! FactV (t - 1) f, E.not $ v ! FactV t f] ++ map (\f' -> v ! ActionV t f') fInAdd
-    fInDel = filter (\a -> f `elem` actionDel a) $ ptActions pt
-    frame2 = E.or $ [E.not $ v ! FactV (t - 1) f, v ! FactV t f] ++ map (\f' -> v ! ActionV t f') fInDel
+    fInAdd = filter (\a -> PosAtom atom `elem` actionPost a) $ ptActions pt
+    frame1 = E.or $ [value v (t - 1) $ PosAtom atom, value v t $ NegAtom atom] ++ map (\f' -> v ! ActionV t f') fInAdd
+    fInDel = filter (\a -> NegAtom atom `elem` actionPost a) $ ptActions pt
+    frame2 = E.or $ [value v (t - 1) $ NegAtom atom, value v t $ PosAtom atom] ++ map (\f' -> v ! ActionV t f') fInDel
 
 -- k is the maximum number of timesteps in the SAT encoding
 ptToSAT :: (Constraints c) => PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit
@@ -52,7 +48,7 @@ ptToSAT pt k v =
     [ initialToSAT pt v,
       goalToSAT pt k v,
       E.and [actionToSAT a t v | a <- ptActions pt, t <- [1 .. k]],
-      E.and [frameAxioms pt f t v | f <- ptFacts pt, t <- [1 .. k]],
+      E.and [frameAxioms pt atom t v | atom <- ptAtoms pt, t <- [1 .. k]],
       constraintsToSat (ptConstraints pt) k v,
       E.and [mutexToSAT mg t v | mg <- ptMutexGroups pt, t <- [0 .. k]],
       E.and [atMostOne (AtMostOneActionV t) [ActionV t a | a <- ptActions pt] v | t <- [1 .. k]]

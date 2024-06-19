@@ -14,7 +14,7 @@ import System.Environment (getArgs)
 import System.Process (readProcess)
 import Text.Read (readMaybe)
 
-solveSAS :: (Constraints c) => FilePath -> c ByteString -> IO ()
+solveSAS :: (Constraints c) => FilePath -> c -> IO ()
 solveSAS path constraints = do
   sas <- readSAS path
   putStrLn "Translating to STRIPS."
