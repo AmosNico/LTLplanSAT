@@ -2,15 +2,17 @@
 
 module Main (main) where
 
-import Constraints (Constraints, NoConstraint (..))
+import Constraints (Constraints (showConstraints), NoConstraint (..))
 import Control.Exception (SomeException, catch)
 import Control.Monad (unless, void)
+import qualified Data.ByteString.Char8 as C8
+import PDDLConstraints (selectSoftConstraints)
 import ParsePDDLConstraints (parsePDDLConstraints)
 import ParseSAS (readSAS)
 import PlanningTask (fromSAS, printPlanningTask)
 import SAT (solve)
 import System.Environment (getArgs)
-import System.Process (readProcess, callProcess)
+import System.Process (callProcess, readProcess)
 import Text.Read (readMaybe)
 import Types (Plan, writePlan)
 
@@ -36,7 +38,9 @@ solvePDDL domain problem = do
   void $ readProcess "python" ["src\\translate\\translate.py", "--keep-unimportant-variables", domain, problem] ""
   putStrLn "Translation to SAS succeded."
   constraints <- parsePDDLConstraints problem
-  plan <- solveSAS "output.sas" constraints
+  constraints' <- selectSoftConstraints constraints
+  C8.putStrLn $ showConstraints constraints'
+  plan <- solveSAS "output.sas" constraints'
   validatePlan domain problem plan
 
 exampleRover :: Int -> IO ()

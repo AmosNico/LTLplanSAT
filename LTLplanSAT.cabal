@@ -48,6 +48,7 @@ library
     , ghc >=9.6.5
     , megaparsec
     , process >=1.6.19.0
+    , random >=1.2.1.2
     , text >=2.0.2
     , vector >=0.13.1.0
   default-language: Haskell2010
@@ -70,6 +71,7 @@ executable LTLplanSAT-exe
     , ghc >=9.6.5
     , megaparsec
     , process >=1.6.19.0
+    , random >=1.2.1.2
     , text >=2.0.2
     , vector >=0.13.1.0
   default-language: Haskell2010
@@ -93,6 +95,7 @@ test-suite LTLplanSAT-test
     , ghc >=9.6.5
     , megaparsec
     , process >=1.6.19.0
+    , random >=1.2.1.2
     , text >=2.0.2
     , vector >=0.13.1.0
   default-language: Haskell2010

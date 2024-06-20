@@ -81,7 +81,10 @@ iterativeSolve pt k = do
   putStrLn $ "Calling the SAT-solver with maximal plan length " ++ show k ++ "."
   (res, mSolution) <- callSAT pt k
   case res of
-    E.Unsatisfied -> iterativeSolve pt (ceiling (fromIntegral k * sqrt 2 :: Double))
+    E.Unsatisfied -> 
+      if k <= 50
+        then iterativeSolve pt (ceiling (fromIntegral k * sqrt 2 :: Double))
+        else error "Giving up. There exists no plan of length 50 or less, the chosen constraints might be unsatisfiable."
     E.Unsolved -> error "The SAT-solver could not solve the planning problem."
     E.Satisfied -> case mSolution of
       Nothing -> error "The SAT-solver said the planning problem is solvable, but did not return a solution."
