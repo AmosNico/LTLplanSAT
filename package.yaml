@@ -20,6 +20,7 @@ dependencies:
 - containers >= 0.6.7
 - megaparsec
 - text >= 2.0.2
+- mtl >= 2.3.1
 - ersatz
 - ghc >= 9.6.5
 - random >= 1.2.1.2

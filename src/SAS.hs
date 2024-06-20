@@ -7,7 +7,6 @@ module SAS
     Action (..),
     SAS (..),
     domainSize,
-    variable,
     numberVariables,
     perfectHash,
     numberFacts,

@@ -2,6 +2,7 @@
 
 module SAT (solve) where
 
+import Control.Monad.State.Lazy (StateT)
 import Constraints (Constraints (constraintsToSat), atMostOne, atMostOneVariables, value)
 import Data.Map (Map, (!))
 import qualified Data.Map.Strict as Map
@@ -70,24 +71,30 @@ extractPlan pt k v = Plan $ mapMaybe extractAction [1 .. k]
             ++ show l
             ++ "."
 
-callSAT :: (Constraints c) => PlanningTask c -> Time -> IO (E.Result, Maybe (Map Variable Bool))
-callSAT pt k = E.solveWith E.cryptominisat5 $ do
+initializeProblem :: (Constraints c) => PlanningTask c -> Time -> StateT E.SAT IO (Map Variable E.Bit)
+initializeProblem pt k = do
   vars <- defineVariables pt k
   E.assert $ ptToSAT pt k vars
   return vars
 
+callSAT :: (Constraints c) => PlanningTask c -> Time -> IO (E.Result, Maybe (Map Variable Bool))
+callSAT pt k = do
+  putStrLn $ "Initialize SAT-description with maximal plan length " ++ show k ++ "."
+  let problem = initializeProblem pt k
+  putStrLn "Calling SAT-solver."
+  E.solveWith E.cryptominisat5 problem
+
 iterativeSolve :: (Constraints c) => PlanningTask c -> Time -> IO Plan
 iterativeSolve pt k = do
-  putStrLn $ "Calling the SAT-solver with maximal plan length " ++ show k ++ "."
   (res, mSolution) <- callSAT pt k
   case res of
     E.Unsatisfied -> 
       if k <= 50
         then iterativeSolve pt (ceiling (fromIntegral k * sqrt 2 :: Double))
-        else error "Giving up. There exists no plan of length 50 or less, the chosen constraints might be unsatisfiable."
-    E.Unsolved -> error "The SAT-solver could not solve the planning problem."
+        else fail "Giving up. There exists no plan of length 50 or less, the chosen constraints might be unsatisfiable."
+    E.Unsolved -> fail "The SAT-solver could not solve the planning problem."
     E.Satisfied -> case mSolution of
-      Nothing -> error "The SAT-solver said the planning problem is solvable, but did not return a solution."
+      Nothing -> fail "The SAT-solver said the planning problem is solvable, but did not return a solution."
       Just solution -> return $ extractPlan pt k solution
 
 solve :: (Constraints c) => PlanningTask c -> IO Plan

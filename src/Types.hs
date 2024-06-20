@@ -34,14 +34,17 @@ showAtom (Atom name) = name
 showAtoms :: [Atom] -> ByteString
 showAtoms atoms = C8.intercalate (C8.pack ", ") $ map showAtom atoms
 
-data Fact = PosAtom Atom | NegAtom Atom deriving (Eq, Ord, Show)
+data Fact = PosAtom Atom | NegAtom Atom deriving (Eq, Ord)
 
 showFact :: Fact -> ByteString
 showFact (PosAtom atom) = showAtom atom
-showFact (NegAtom atom) = C8.append (C8.pack "not ") (showAtom atom)
+showFact (NegAtom atom) = C8.append "not " (showAtom atom)
+
+instance Show Fact where
+  show = C8.unpack . showFact
 
 showFacts :: [Fact] -> ByteString
-showFacts fs = C8.intercalate (C8.pack ", ") $ map showFact fs
+showFacts fs = C8.intercalate ", " $ map showFact fs
 
 negateFact :: Fact -> Fact
 negateFact (PosAtom atom) = NegAtom atom

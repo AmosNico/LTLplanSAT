@@ -3,4 +3,5 @@ bin/
 dist-newstyle/
 output.sas
 *.txt
+*.pyc
 *~

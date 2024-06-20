@@ -65,10 +65,6 @@ nameToFact name
           ++ show name
           ++ " is expected to start with \"Atom \" or \"NegatedAtom\"."
 
-factToName :: Fact -> ByteString
-factToName (PosAtom (Atom name)) = C8.append "Atom " name
-factToName (NegAtom (Atom name)) = C8.append "NegatedAtom " name
-
 convertFact :: SAS -> SAS.Fact -> Fact
 convertFact sas fact = nameToFact $ SAS.factName sas fact
 
