@@ -9,11 +9,11 @@ module PDDLConstraints
   )
 where
 
-import Constraints (Constraints (..), alwaysBetween, sometimeBetween, value)
+import Constraints (Constraints (..), alwaysBetween, atMostOne, sometimeBetween, value)
 import Control.Monad (filterM)
 import qualified Data.ByteString.Char8 as C8
+import Data.Functor (void)
 import Data.List ((\\))
-import qualified Data.Map as Map
 import qualified Ersatz as E
 import System.Random (randomRIO)
 import Types (Fact)
@@ -56,33 +56,29 @@ selectSoftConstraints (PDDLConstraints hc sc ic) = do
   return (PDDLConstraints hc sc' ic')
 
 instance Constraints PDDLConstraint where
-  constraintsToSat (AtEnd f) k v = value v k f
-  constraintsToSat (Always f) k v = alwaysBetween 0 k f v
-  constraintsToSat (Sometime f) k v = sometimeBetween 0 k f v
-  constraintsToSat (Within n f) k v = sometimeBetween 0 (min n k) f v
-  -- constraintsToSat (AtMostOnce f) k v = atMostOne (AtMostOnceV f) [FactV t f | t <- [0 .. k]] v
-  constraintsToSat (AtMostOnce f) k v = E.and [E.nand [value v t1 f, value v t2 f] | t1 <- [0 .. k], t2 <- [t1..k]]
-  constraintsToSat (SometimeAfter f1 f2) k v = E.and [value v t1 f1 E.==> after t1 | t1 <- [0 .. k]]
+  constraintsToSAT (AtEnd f) k v = E.assert $ value v k f
+  constraintsToSAT (Always f) k v = E.assert $ alwaysBetween 0 k f v
+  constraintsToSAT (Sometime f) k v = E.assert $ sometimeBetween 0 k f v
+  constraintsToSAT (Within n f) k v = E.assert $ sometimeBetween 0 (min n k) f v
+  constraintsToSAT (AtMostOnce f) k v = 
+    -- f should become true at most once
+    void $ atMostOne [E.not (value v (t-1) f) E.&& value v t f | t <- [1 .. k]]
+  constraintsToSAT (SometimeAfter f1 f2) k v = E.assert $ E.and [value v t1 f1 E.==> after t1 | t1 <- [0 .. k]]
     where
       after t1 = sometimeBetween (t1 + 1) k f2 v
-  constraintsToSat (SometimeBefore f1 f2) k v = E.and [value v t1 f1 E.==> before t1 | t1 <- [0 .. k]]
+  constraintsToSAT (SometimeBefore f1 f2) k v = E.assert $ E.and [value v t1 f1 E.==> before t1 | t1 <- [0 .. k]]
     where
       before t1 = sometimeBetween 0 (t1 - 1) f2 v
-  constraintsToSat (AlwaysWithin n f1 f2) k v = E.and [value v t1 f1 E.==> within t1 | t1 <- [0 .. k]]
+  constraintsToSAT (AlwaysWithin n f1 f2) k v = E.assert $ E.and [value v t1 f1 E.==> within t1 | t1 <- [0 .. k]]
     where
       within t1 = sometimeBetween t1 (t1 + n) f2 v
-  constraintsToSat (HoldDuring n1 n2 f) k v = if k < n2 then E.false else alwaysBetween n1 n2 f v
-  constraintsToSat (HoldAfter n f) k v = if k < n then E.false else alwaysBetween n k f v
-
-  -- defineExtraVariables (AtMostOnce f) k = defineAtMostOneVariables (AtMostOnceV f) k
-  defineExtraVariables _ _ = return Map.empty
+  constraintsToSAT (HoldDuring n1 n2 f) k v = E.assert $ if k < n2 then E.false else alwaysBetween n1 n2 f v
+  constraintsToSAT (HoldAfter n f) k v = E.assert $ if k < n then E.false else alwaysBetween n k f v
 
   showConstraints c = C8.pack $ show c
 
 instance Constraints PDDLConstraints where
-  constraintsToSat (PDDLConstraints hc sc _) t v = E.and $ map (\c -> constraintsToSat c t v) (hc ++ sc)
-
-  defineExtraVariables (PDDLConstraints hc sc _) k = Map.unions <$> mapM (`defineExtraVariables` k) (hc ++ sc)
+  constraintsToSAT (PDDLConstraints hc sc _) t v = mapM_ (\c -> constraintsToSAT c t v) (hc ++ sc)
 
   showConstraints (PDDLConstraints hc sc ic) =
     C8.concat

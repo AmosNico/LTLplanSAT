@@ -90,7 +90,7 @@ instance Show Action where
 
 type Time = Int
 
-data Variable = ActionV Time Action | AtomV Time Atom | AtMostOneActionV Time Int | AtMostOnceV Fact Int
+data Variable = ActionV Time Action | AtomV Time Atom
   deriving (Eq, Ord)
 
 newtype Plan = Plan [Action]

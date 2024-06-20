@@ -1,21 +1,17 @@
-{-# LANGUAGE TupleSections #-}
-
 module Constraints
   ( NoConstraint (..),
     Constraints (..),
     value,
     sometimeBetween,
     alwaysBetween,
-    atMostOneVariables,
-    defineAtMostOneVariables,
     atMostOne,
   )
 where
 
+import Control.Monad (replicateM)
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Data.Map (Map, (!))
-import qualified Data.Map as Map
 import qualified Ersatz as E
 import Types (Fact (..), Time, Variable (AtomV))
 
@@ -23,17 +19,14 @@ import Types (Fact (..), Time, Variable (AtomV))
 -- The instance of the functor class ensures that the facts of constraints (which are typically read as bytestrings),
 -- can be transformed into the integers that PlanningTask uses.
 class Constraints c where
-  constraintsToSat :: c -> Time -> Map Variable E.Bit -> E.Bit
-
-  defineExtraVariables :: (E.MonadSAT s m) => c -> Time -> m (Map Variable E.Bit)
+  constraintsToSAT :: (E.MonadSAT s m) => c -> Time -> Map Variable E.Bit -> m ()
 
   showConstraints :: c -> ByteString
 
 data NoConstraint = NoConstraint
 
 instance Constraints NoConstraint where
-  constraintsToSat _ _ _ = E.true
-  defineExtraVariables _ _ = return Map.empty
+  constraintsToSAT _ _ _ = return ()
   showConstraints NoConstraint = C8.pack "No constraints"
 
 value :: Map Variable E.Bit -> Time -> Fact -> E.Bit
@@ -46,19 +39,10 @@ sometimeBetween t1 t2 f v = E.or [value v t f | t <- [t1 .. t2]]
 alwaysBetween :: Time -> Time -> Fact -> Map Variable E.Bit -> E.Bit
 alwaysBetween t1 t2 f v = E.and [value v t f | t <- [t1 .. t2]]
 
--- For the following functions the first argument is expected to be either atMostOnceV fact or atMostOneActionV time.
-atMostOneVariables :: (Int -> Variable) -> Int -> [Variable]
-atMostOneVariables toAMOVariable nOptions = [toAMOVariable i | i <- [0 .. n - 1]]
-  where
-    n = ceiling (logBase 2 $ fromIntegral nOptions :: Double)
-
-defineAtMostOneVariables :: (E.MonadSAT s m) => (Int -> Variable) -> Int -> m (Map Variable E.Bit)
-defineAtMostOneVariables nOptions toAMOVariable =
-  sequence $ Map.fromList $ map (,E.exists) $ atMostOneVariables nOptions toAMOVariable
-
-atMostOne :: (Int -> Variable) -> [Variable] -> Map Variable E.Bit -> E.Bit
-atMostOne toAmoVariable vars v = E.and $ zipWith constr [0 ..] vars
-  where
-    amoVars = atMostOneVariables toAmoVariable (length vars)
-    bits = E.Bits $ map (v !) amoVars
-    constr idx var = v ! var E.==> (bits E.=== E.encode idx)
+atMostOne :: (E.MonadSAT s m) => [E.Bit] -> m E.Bits
+atMostOne options = do
+  let n = ceiling (logBase 2 $ fromIntegral $ length options :: Double)
+  bits <- E.Bits <$> replicateM n E.exists
+  let constr idx option = option E.==> (bits E.=== E.encode idx)
+  E.assert $ E.and $ zipWith constr [0 ..] options
+  return bits
