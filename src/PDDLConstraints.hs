@@ -27,8 +27,8 @@ data PDDLConstraint
   | SometimeAfter Fact Fact
   | SometimeBefore Fact Fact
   | AlwaysWithin Int Fact Fact
-  | HoldDuring Int Int Fact
-  | HoldAfter Int Fact
+  | HoldDuring Int Int Fact -- HoldDuring t1 t2 f means that f should always be true in the interval [t1,t2)]
+  | HoldAfter Int Fact -- HoldAfter t f means that f should always be true after t (including at time t)
   deriving (Eq, Show)
 
 data PDDLConstraints
@@ -72,7 +72,7 @@ instance Constraints PDDLConstraint where
   constraintsToSAT (AlwaysWithin n f1 f2) k v = E.assert $ E.and [value v t1 f1 E.==> within t1 | t1 <- [0 .. k]]
     where
       within t1 = sometimeBetween t1 (t1 + n) f2 v
-  constraintsToSAT (HoldDuring n1 n2 f) k v = E.assert $ if k < n2 then E.false else alwaysBetween n1 n2 f v
+  constraintsToSAT (HoldDuring n1 n2 f) k v = E.assert $ if k < n2 then E.false else alwaysBetween n1 (n2 - 1) f v
   constraintsToSAT (HoldAfter n f) k v = E.assert $ if k < n then E.false else alwaysBetween n k f v
 
   showConstraints c = C8.pack $ show c
