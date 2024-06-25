@@ -40,9 +40,9 @@ alwaysBetween :: Time -> Time -> Fact -> Map Variable E.Bit -> E.Bit
 alwaysBetween t1 t2 f v = E.and [value v t f | t <- [t1 .. t2]]
 
 atMostOne :: (E.MonadSAT s m) => [E.Bit] -> m E.Bits
-atMostOne options = do
-  let n = ceiling (logBase 2 $ fromIntegral $ length options :: Double)
+atMostOne l = do
+  let n = ceiling (logBase 2 $ fromIntegral $ length l :: Double)
   bits <- E.Bits <$> replicateM n E.exists
   let constr idx option = option E.==> (bits E.=== E.encode idx)
-  E.assert $ E.and $ zipWith constr [0 ..] options
+  E.assert $ E.and $ zipWith constr [0 ..] l
   return bits

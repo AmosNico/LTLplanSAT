@@ -4,6 +4,7 @@ module PlanningTask
   ( PlanningTask (..),
     ptNumberAtoms,
     ptNumberActions,
+    ptFacts,
     showFact,
     showFacts,
     showAction,
@@ -17,6 +18,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Data.List (find, sort, (\\))
 import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.Set as Set
 import SAS (SAS)
 import qualified SAS
 import Types
@@ -30,13 +32,16 @@ data PlanningTask constraintType = PlanningTask
     ptMutexGroups :: [MutexGroup]
   }
 
-ptNumberAtoms :: PlanningTask a -> Int
+ptNumberAtoms :: PlanningTask c -> Int
 ptNumberAtoms pt = length $ ptAtoms pt
 
-ptNumberActions :: PlanningTask a -> Int
+ptNumberActions :: PlanningTask c -> Int
 ptNumberActions pt = length $ ptActions pt
 
-printPlanningTask :: (Constraints a) => PlanningTask a -> IO ()
+ptFacts :: PlanningTask c -> [Fact]
+ptFacts pt = map PosAtom (ptAtoms pt) ++ map NegAtom (ptAtoms pt)
+
+printPlanningTask :: (Constraints c) => PlanningTask c -> IO ()
 printPlanningTask pt =
   C8.putStrLn $
     C8.concat
@@ -83,7 +88,7 @@ deletingEffects sas a = convertFacts sas $ concatMap f (SAS.actionPost a)
 
 convertAction :: SAS -> SAS.Action -> Action
 convertAction sas a@(SAS.Action name pre post c) =
-  Action name pre' (post' ++ del) c
+  Action name (Set.fromList pre') (Set.fromList $ post' ++ del) c
   where
     pre' = convertFacts sas pre
     post' = convertFacts sas post

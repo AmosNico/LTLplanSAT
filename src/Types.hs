@@ -19,12 +19,16 @@ module Types
     Variable (..),
     Plan (..),
     writePlan,
+    Encoding (..),
+    Options (..),
   )
 where
 
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as C8
+import qualified Data.Foldable as Set
 import Data.List (intercalate)
+import Data.Set (Set)
 
 newtype Atom = Atom ByteString deriving (Eq, Ord, Show)
 
@@ -66,11 +70,20 @@ type Goal = [Fact]
 
 data Action = Action
   { actionName :: ByteString,
-    actionPre :: [Fact],
-    actionPost :: [Fact],
+    actionPre :: Set Fact,
+    actionPost :: Set Fact,
     actionCost :: Int
   }
-  deriving (Eq, Ord)
+
+-- No need to compare preconditions and postconditions
+instance Eq Action where
+  (==) a1 a2 = actionName a1 == actionName a2
+
+instance Ord Action where
+  compare a1 a2 = compare (actionName a1) (actionName a2)
+
+instance Show Action where
+  show a = C8.unpack $ actionName a
 
 showAction :: Action -> ByteString
 showAction (Action name pre post cost) =
@@ -79,19 +92,16 @@ showAction (Action name pre post cost) =
       " (cost ",
       C8.pack (show cost),
       "): \n  pre = {",
-      showFacts pre,
+      showFacts $ Set.toList pre, -- TODO
       "}: \n  post = {",
-      showFacts post,
+      showFacts $ Set.toList post, -- TODO
       "}"
     ]
-
-instance Show Action where
-  show a = C8.unpack $ actionName a
 
 type Time = Int
 
 data Variable = ActionV Time Action | AtomV Time Atom
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 newtype Plan = Plan [Action]
 
@@ -109,3 +119,10 @@ instance Show Plan where
       ++ show (sum $ map actionCost as)
       ++ ":\n  "
       ++ intercalate "\n  " (map show as)
+
+data Encoding = Sequential | ExistsStep
+
+data Options = Options
+  { softConstraintsProbability :: Double,
+    encoding :: Encoding
+  }

@@ -48,9 +48,9 @@ singleHard, singleSoft :: PDDLConstraint -> PDDLConstraints
 singleHard c = PDDLConstraints [c] [] []
 singleSoft c = PDDLConstraints [] [] [c]
 
-selectSoftConstraints :: PDDLConstraints -> IO PDDLConstraints
-selectSoftConstraints (PDDLConstraints hc sc ic) = do
-  let choose = (< (0.2 :: Float)) <$> randomRIO (0.0, 1.0)
+selectSoftConstraints :: PDDLConstraints -> Double -> IO PDDLConstraints
+selectSoftConstraints (PDDLConstraints hc sc ic) probability = do
+  let choose = (< probability) <$> randomRIO (0.0, 1.0)
   sc' <- filterM (const choose) (sc ++ ic)
   let ic' = (sc ++ ic) \\ sc'
   return (PDDLConstraints hc sc' ic')

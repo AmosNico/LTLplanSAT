@@ -25,6 +25,7 @@ source-repository head
 library
   exposed-modules:
       Constraints
+      ExistsStepSAT
       LTLConstraints
       ParsePDDLConstraints
       ParseSAS
@@ -45,6 +46,7 @@ library
     , bytestring >=0.11.5.3
     , containers >=0.6.7
     , ersatz
+    , extra >=1.7.16
     , ghc >=9.6.5
     , megaparsec
     , mtl >=2.3.1
@@ -69,6 +71,7 @@ executable LTLplanSAT-exe
     , bytestring >=0.11.5.3
     , containers >=0.6.7
     , ersatz
+    , extra >=1.7.16
     , ghc >=9.6.5
     , megaparsec
     , mtl >=2.3.1
@@ -94,6 +97,7 @@ test-suite LTLplanSAT-test
     , bytestring >=0.11.5.3
     , containers >=0.6.7
     , ersatz
+    , extra >=1.7.16
     , ghc >=9.6.5
     , megaparsec
     , mtl >=2.3.1

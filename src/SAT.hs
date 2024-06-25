@@ -10,12 +10,14 @@ import Data.Maybe (mapMaybe)
 import qualified Ersatz as E
 import PlanningTask
 import Types
+import qualified Data.Set as Set
+import ExistsStepSAT (existsStep, extractExistsStepPlan)
 
 defineVariables :: (E.MonadSAT s m) => PlanningTask c -> Time -> m (Map Variable E.Bit)
-defineVariables pt k = sequence $ Map.fromList $ map (,E.exists) (actionVars ++ factVars)
+defineVariables pt k = sequence $ Map.fromList $ map (,E.exists) (actionVars ++ atomVars)
   where
     actionVars = [ActionV t a | a <- ptActions pt, t <- [1 .. k]]
-    factVars = [AtomV t atom | atom <- ptAtoms pt, t <- [0 .. k]]
+    atomVars = [AtomV t atom | atom <- ptAtoms pt, t <- [0 .. k]]
 
 initialToSAT :: PlanningTask c -> Map Variable E.Bit -> E.Bit
 initialToSAT pt v = E.and $ map (value v 0) $ ptInitalState pt
@@ -26,16 +28,13 @@ goalToSAT pt k v = E.and $ map (value v k) $ ptGoal pt
 actionToSAT :: Action -> Time -> Map Variable E.Bit -> E.Bit
 actionToSAT a t v = E.and $ pre ++ add
   where
-    pre = map (\f -> v ! ActionV t a E.==> value v (t - 1) f) $ actionPre a
-    add = map (\f -> v ! ActionV t a E.==> value v t f) $ actionPost a
+    pre = map (\f -> v ! ActionV t a E.==> value v (t - 1) f) $ Set.toList $ actionPre a
+    add = map (\f -> v ! ActionV t a E.==> value v t f) $ Set.toList $ actionPost a
 
-frameAxioms :: PlanningTask c -> Atom -> Time -> Map Variable E.Bit -> E.Bit
-frameAxioms pt atom t v = frame1 E.&& frame2
+frameAxiom :: PlanningTask c -> Fact -> Time -> Map Variable E.Bit -> E.Bit
+frameAxiom pt fact t v = E.or $ [value v (t - 1) fact, value v t $ negateFact fact] ++ actions
   where
-    fInAdd = filter (\a -> PosAtom atom `elem` actionPost a) $ ptActions pt
-    frame1 = E.or $ [value v (t - 1) $ PosAtom atom, value v t $ NegAtom atom] ++ map (\a -> v ! ActionV t a) fInAdd
-    fInDel = filter (\a -> NegAtom atom `elem` actionPost a) $ ptActions pt
-    frame2 = E.or $ [value v (t - 1) $ NegAtom atom, value v t $ PosAtom atom] ++ map (\a -> v ! ActionV t a) fInDel
+    actions = map (\a -> v ! ActionV t a) $ filter (\a -> fact `elem` actionPost a) $ ptActions pt
 
 -- k is the maximum number of timesteps in the SAT encoding
 ptToSAT :: PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit
@@ -43,8 +42,8 @@ ptToSAT pt k v =
   E.and
     [ initialToSAT pt v,
       goalToSAT pt k v,
-      E.and [actionToSAT a t v | a <- ptActions pt, t <- [1 .. k]],
-      E.and [frameAxioms pt atom t v | atom <- ptAtoms pt, t <- [1 .. k]]
+      E.and [actionToSAT action t v | action <- ptActions pt, t <- [1 .. k]],
+      E.and [frameAxiom pt fact t v | fact <- ptFacts pt, t <- [1 .. k]]
     ]
 
 mutexesToSAT :: (E.MonadSAT s m) => PlanningTask c -> Time -> Map Variable E.Bit -> m ()
@@ -55,24 +54,26 @@ noParallelActions :: (E.MonadSAT s m) => PlanningTask c -> Time -> Map Variable 
 noParallelActions pt k v = sequence_  [atMostOneAction t | t <- [1..k]] where
   atMostOneAction t = atMostOne $ map (\a -> v ! ActionV t a) $ ptActions pt
 
-initializeProblem :: (Constraints c) => PlanningTask c -> Time -> StateT E.SAT IO (Map Variable E.Bit)
-initializeProblem pt k = do
+initializeProblem :: (Constraints c) => PlanningTask c -> Options -> Time -> StateT E.SAT IO (Map Variable E.Bit)
+initializeProblem pt options k = do
   vars <- defineVariables pt k
   E.assert $ ptToSAT pt k vars
-  noParallelActions pt k vars
+  case encoding options of
+    Sequential -> noParallelActions pt k vars
+    ExistsStep -> existsStep pt k vars
   mutexesToSAT pt k vars
   constraintsToSAT (ptConstraints pt) k vars
   return vars
 
-callSAT :: (Constraints c) => PlanningTask c -> Time -> IO (E.Result, Maybe (Map Variable Bool))
-callSAT pt k = do
+callSAT :: (Constraints c) => PlanningTask c -> Options -> Time -> IO (E.Result, Maybe (Map Variable Bool))
+callSAT pt options k = do
   putStrLn $ "Initialize SAT-description with maximal plan length " ++ show k ++ "."
-  let problem = initializeProblem pt k
+  let problem = initializeProblem pt options k
   putStrLn "Calling SAT-solver."
   E.solveWith E.cryptominisat5 problem
 
-extractPlan :: PlanningTask c -> Time -> Map Variable Bool -> Plan
-extractPlan pt k v = Plan $ mapMaybe extractAction [1 .. k]
+extractSequentialPlan :: PlanningTask c -> Time -> Map Variable Bool -> Plan
+extractSequentialPlan pt k v = Plan $ mapMaybe extractAction [1 .. k]
   where
     extractAction :: Time -> Maybe Action
     extractAction t = case filter (\a -> v ! ActionV t a) $ ptActions pt of
@@ -87,19 +88,24 @@ extractPlan pt k v = Plan $ mapMaybe extractAction [1 .. k]
             ++ show l
             ++ "."
 
-iterativeSolve :: (Constraints c) => PlanningTask c -> Time -> IO Plan
-iterativeSolve pt k = do
-  (res, mSolution) <- callSAT pt k
+extractPlan :: PlanningTask c -> Options -> Time -> Map Variable Bool -> Plan
+extractPlan pt options k v = case encoding options of
+  Sequential -> extractSequentialPlan pt k v
+  ExistsStep -> extractExistsStepPlan pt k v
+
+iterativeSolve :: (Constraints c) => PlanningTask c -> Options -> Time -> IO Plan
+iterativeSolve pt options k = do
+  (res, mSolution) <- callSAT pt options k
   case res of
     E.Unsatisfied ->
-      if k <= 50
-        then iterativeSolve pt (ceiling (fromIntegral k * sqrt 2 :: Double))
-        else fail "Giving up. There exists no plan of length 50 or less, the chosen constraints might be unsatisfiable."
+      if k <= 100
+        then iterativeSolve pt options (ceiling (fromIntegral k * sqrt 2 :: Double))
+        else fail "Giving up. There exists no plan of length 100 or less, the chosen constraints might be unsatisfiable."
     E.Unsolved -> fail "The SAT-solver could not solve the planning problem."
     E.Satisfied -> case mSolution of
       Nothing -> fail "The SAT-solver said the planning problem is solvable, but did not return a solution."
-      Just solution -> return $ extractPlan pt k solution
+      Just solution -> return $ extractPlan pt options k solution
 
-solve :: (Constraints c) => PlanningTask c -> IO Plan
-solve pt = do
-  iterativeSolve pt 5
+solve :: (Constraints c) => PlanningTask c -> Options -> IO Plan
+solve pt options = do
+  iterativeSolve pt options 5

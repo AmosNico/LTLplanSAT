@@ -14,7 +14,7 @@ import SAT (solve)
 import System.Environment (getArgs)
 import System.Process (callProcess, readProcess)
 import Text.Read (readMaybe)
-import Types (Plan, writePlan)
+import Types (Plan, writePlan, Options(..), Encoding (..))
 
 solveSAS :: (Constraints c) => FilePath -> c -> IO Plan
 solveSAS path constraints = do
@@ -22,7 +22,7 @@ solveSAS path constraints = do
   putStrLn "Translating to STRIPS."
   let pt = fromSAS sas constraints
   -- printPlanningTask pt
-  plan <- solve pt
+  plan <- solve pt $ Options 0 ExistsStep
   print plan
   return plan
 
@@ -38,7 +38,7 @@ solvePDDL domain problem = do
   void $ readProcess "python" ["src\\translate\\translate.py", "--keep-unimportant-variables", domain, problem] ""
   putStrLn "Translation to SAS succeded."
   constraints <- parsePDDLConstraints problem
-  constraints' <- selectSoftConstraints constraints
+  constraints' <- selectSoftConstraints constraints 0.2
   C8.putStrLn $ showConstraints constraints'
   plan <- solveSAS "output.sas" constraints'
   validatePlan domain problem plan
@@ -58,15 +58,17 @@ description :: String
 description =
   "\nYou can call the solver immediately by providing arguments with the "
     ++ "path of the domain file and the path of the problem file.\n"
-    ++ "Alternatively, you can run one of the following commands (WARNING: currently can't handle spaces in paths):\n"
+    ++ "Alternatively, you can run one of the following commands:\n"
     ++ "* \"pddl domain problem\" where domain is the path of the domain file "
-    ++ "and problem is the path of the problem file. This runs the solver on the specified files.\n"
+    ++ "and problem is the path of the problem file. This runs the solver on the specified files. "
+    ++ "(WARNING: currently can't handle spaces in paths)\n"
     ++ "* \"rovers n\" where n is a number between 1 and 20. "
     ++ "This runs the solver on the rovers domain with the problem file corresponding to n.\n"
     ++ "* \"sas problem\" where problem is the path of a SAS-file. "
-    ++ "This runs the solver on the specified file.\n"
+    ++ "This runs the solver on the specified file. "
+    ++ "(WARNING: currently can't handle spaces in paths)\n"
     ++ "* \"airport n\" where n is a number between 1 and 4. "
-    ++ "This runs the solver on the corresponding sas-file in the folder \"examples SAS\""
+    ++ "This runs the solver on the corresponding sas-file in the folder \"examples SAS\"\n"
     ++ "* \"help\" to display this description.\n"
     ++ "* \"quit\" to stop the program.\n"
 
