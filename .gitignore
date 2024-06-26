@@ -3,5 +3,6 @@ dist-newstyle/
 output.sas
 *.txt
 *.pyc
+*.exe
 Val/
 *~

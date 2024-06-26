@@ -90,18 +90,18 @@ extractSequentialPlan pt k v = Plan $ mapMaybe extractAction [1 .. k]
             ++ show l
             ++ "."
 
-extractPlan :: PlanningTask c -> Options -> Time -> Map Variable Bool -> Plan
-extractPlan pt options k v = case encoding options of
+extractPlan :: Options -> PlanningTask c -> Time -> Map Variable Bool -> Plan
+extractPlan options pt k v = case encoding options of
   Sequential -> extractSequentialPlan pt k v
   ExistsStep -> extractExistsStepPlan pt k v
 
-iterativeSolve :: (Constraints c) => PlanningTask c -> Options -> Time -> IO Plan
-iterativeSolve pt options k = do
+iterativeSolve :: (Constraints c) => Options -> PlanningTask c ->  Time -> IO Plan
+iterativeSolve options pt k = do
   (res, mSolution) <- callSAT pt options k
   case res of
     E.Unsatisfied ->
       if k <= maxTimeSteps options
-        then iterativeSolve pt options (ceiling (fromIntegral k * sqrt 2 :: Double))
+        then iterativeSolve options pt (ceiling (fromIntegral k * sqrt 2 :: Double))
         else
           fail $
             "Giving up. There exists no plan of length"
@@ -110,8 +110,8 @@ iterativeSolve pt options k = do
     E.Unsolved -> fail "The SAT-solver could not solve the planning problem."
     E.Satisfied -> case mSolution of
       Nothing -> fail "The SAT-solver said the planning problem is solvable, but did not return a solution."
-      Just solution -> return $ extractPlan pt options k solution
+      Just solution -> return $ extractPlan options pt k solution
 
-solve :: (Constraints c) => PlanningTask c -> Options -> IO Plan
-solve pt options = do
-  iterativeSolve pt options 5
+solve :: (Constraints c) => Options -> PlanningTask c -> IO Plan
+solve options pt = do
+  iterativeSolve options pt 5

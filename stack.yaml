@@ -6,4 +6,4 @@ packages:
 
 # flags: {}
 # extra-package-dbs: []
-# local-bin-path: ./bin
+local-bin-path: .

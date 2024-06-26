@@ -1,76 +1,74 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module Main (main) where
 
-import Constraints (Constraints (showConstraints), NoConstraint (..))
-import Control.Exception (SomeException, catch)
-import Control.Monad (unless, void)
-import qualified Data.ByteString.Char8 as C8
-import PDDLConstraints (selectSoftConstraints)
-import ParsePDDLConstraints (parsePDDLConstraints)
-import ParseSAS (readSAS)
-import PlanningTask (fromSAS, printPlanningTask)
-import SAT (solve)
-import System.Environment (getArgs)
-import System.Process (callProcess, readProcess)
+import Control.Monad (void)
+import Options.Applicative
+import Solver (exampleAirport, exampleRover, solvePDDL, solveSAS)
 import Text.Read (readMaybe)
-import Types (Plan, writePlan, Options(..), Encoding (..))
+import Types (Encoding (..), Options (..))
 
-solveSAS :: (Constraints c) => FilePath -> c -> IO Plan
-solveSAS path constraints = do
-  sas <- readSAS path
-  putStrLn "Translating to STRIPS."
-  let pt = fromSAS sas constraints
-  -- printPlanningTask pt
-  plan <- solve pt $ Options 0 True 50 ExistsStep
-  print plan
-  return plan
-
-validatePlan :: FilePath -> FilePath -> Plan -> IO ()
-validatePlan domain problem plan = do
-  putStrLn "Checking the plan using Val."
-  writePlan plan
-  callProcess "Val\\bin\\validate.exe" [domain, problem, "plan.txt"]
-
-solvePDDL :: FilePath -> FilePath -> IO ()
-solvePDDL domain problem = do
-  putStrLn "Calling Fast-Downward to translate to SAS."
-  void $ readProcess "python" ["src\\translate\\translate.py", "--keep-unimportant-variables", domain, problem] ""
-  putStrLn "Translation to SAS succeded."
-  constraints <- parsePDDLConstraints problem
-  constraints' <- selectSoftConstraints constraints 0.2
-  C8.putStrLn $ showConstraints constraints'
-  plan <- solveSAS "output.sas" constraints'
-  validatePlan domain problem plan
-
-exampleRover :: Int -> IO ()
-exampleRover n =
-  solvePDDL
-    "examples PDDL\\IPC5 - rovers\\QualitativePreferences\\domain.pddl"
-    ("examples PDDL\\IPC5 - rovers\\QualitativePreferences\\p" ++ version ++ ".pddl")
+parseSCP :: Parser Double
+parseSCP = option auto (long name <> metavar "PROBABILITY" <> value 0 <> help description)
   where
-    version = if n < 10 then "0" ++ show n else show n
+    name = "soft-constraint"
+    description = "The probability that each soft constraint is converted to a hard constraint."
 
-exampleAirport :: Int -> IO ()
-exampleAirport n = void $ solveSAS ("examples SAS\\" ++ show n ++ ".in") NoConstraint
+parseConvertToLTL :: Parser Bool
+parseConvertToLTL = switch (long "to-LTL" <> help description)
+  where
+    description = "Convert the pddl constraints to LTL before handing them to the SAT-solver."
 
-description :: String
-description =
-  "\nYou can call the solver immediately by providing arguments with the "
-    ++ "path of the domain file and the path of the problem file.\n"
-    ++ "Alternatively, you can run one of the following commands:\n"
-    ++ "* \"pddl domain problem\" where domain is the path of the domain file "
-    ++ "and problem is the path of the problem file. This runs the solver on the specified files. "
-    ++ "(WARNING: currently can't handle spaces in paths)\n"
-    ++ "* \"rovers n\" where n is a number between 1 and 20. "
-    ++ "This runs the solver on the rovers domain with the problem file corresponding to n.\n"
-    ++ "* \"sas problem\" where problem is the path of a SAS-file. "
-    ++ "This runs the solver on the specified file. "
-    ++ "(WARNING: currently can't handle spaces in paths)\n"
-    ++ "* \"airport n\" where n is a number between 1 and 4. "
-    ++ "This runs the solver on the corresponding sas-file in the folder \"examples SAS\"\n"
-    ++ "* \"help\" to display this description.\n"
-    ++ "* \"quit\" to stop the program.\n"
+parseMaxSteps :: Parser Int
+parseMaxSteps = option auto (long name <> short 'M' <> metavar "INT" <> value 50 <> help description)
+  where
+    name = "max-time-steps"
+    description =
+      "The maximum number of timesteps the SAT-solver should try before judging "
+        ++ "the problem to be unsolvable. Note that for the ExistsStep encoding this is not equal to "
+        ++ "the number of actions."
+
+readMaybeEncoding :: String -> Maybe Encoding
+readMaybeEncoding "sequential" = Just Sequential
+readMaybeEncoding "exists-step" = Just ExistsStep
+readMaybeEncoding _ = Nothing
+
+parseEncoding :: Parser Encoding
+parseEncoding = option (maybeReader readMaybeEncoding) modifier
+  where
+    modifier = long "encoding" <> short 'e' <> metavar "ENCODING" <> value ExistsStep <> help description
+    description =
+      "The encoding used for the SAT-solver, this is either \"sequential\" for a sequential encoding "
+        ++ "or \"exists-step\" for a parallel encoding using exists step."
+
+parsePDDLOptions :: Parser Options
+parsePDDLOptions = Options <$> parseSCP <*> parseConvertToLTL <*> parseMaxSteps <*> parseEncoding
+
+parseSASOptions :: Parser Options
+parseSASOptions = Options 0 False <$> parseMaxSteps <*> parseEncoding
+
+data Command
+  = PDDL FilePath FilePath Options
+  | SAS FilePath Options
+  | Rovers Int Options
+  | Airport Int Options
+
+commandPDDL :: Mod CommandFields Command
+commandPDDL = command "pddl" (info parsePDDL (progDesc description))
+  where
+    description = "Run the solver on the given domain and problem files."
+    parsePDDL =
+      PDDL
+        <$> strArgument (metavar "DOMAIN")
+        <*> strArgument (metavar "PROBLEM")
+        <*> parsePDDLOptions
+
+commandSAS :: Mod CommandFields Command
+commandSAS = command "sas" (info parseSAS (progDesc description))
+  where
+    description = "Run the solver on the given SAS-file."
+    parseSAS =
+      SAS
+        <$> strArgument (metavar "FILEPATH")
+        <*> parseSASOptions
 
 readInRange :: Int -> Int -> String -> Maybe Int
 readInRange l u s = do
@@ -79,38 +77,37 @@ readInRange l u s = do
     then Just n
     else Nothing
 
--- TODO: can't handle spaces in filenames
-handleCommand :: String -> IO ()
-handleCommand command = case words command of
-  ["pddl", domain, problem] -> solvePDDL domain problem
-  ["rovers", s] -> case readInRange 1 20 s of
-    Nothing ->
-      putStrLn $
-        "Expected an integer between 1 and 20, but got " ++ s ++ "."
-    Just n -> exampleRover n
-  ["sas", path] -> void $ solveSAS path NoConstraint
-  ["airport", s] -> case readInRange 1 4 s of
-    Nothing ->
-      putStrLn $
-        "Expected an integer between 1 and 4, but got " ++ s ++ "."
-    Just n -> exampleAirport n
-  ["help"] -> putStrLn description
-  ["quit"] -> return ()
-  _ -> do
-    putStrLn $ "Command " ++ show command ++ " not recognised."
+commandRovers :: Mod CommandFields Command
+commandRovers = command "rovers" (info parseRovers (progDesc description)) <> metavar "rovers"
+  where
+    description = "Run the solver on the rovers domain with specified problem file (as an Int between 1 and 20)."
+    parseRovers =
+      Rovers
+        <$> argument (maybeReader $ readInRange 1 20) (metavar "INT")
+        <*> parsePDDLOptions
 
-loop :: IO ()
-loop = do
-  command <- getLine
-  _ <- catch (handleCommand command) (\e -> print (e :: SomeException))
-  unless (command == "quit") loop
+commandAirport :: Mod CommandFields Command
+commandAirport = command "airport" (info parseAirport (progDesc description)) <> metavar "airport"
+  where
+    description = "Run the solver on the specified airport SAS-file. These problems are mostly for debugging purposes."
+    parseAirport =
+      Airport
+        <$> argument (maybeReader $ readInRange 1 4) (metavar "INT")
+        <*> parseSASOptions
+
+parseCommand :: Parser Command
+parseCommand = hsubparser $ commandPDDL <> commandSAS <> commandAirport <> commandRovers
+
+parser :: ParserInfo Command
+parser = info (parseCommand <**> helper) describe
+  where
+    describe = fullDesc <> progDesc "TODO" <> header "Welcome to LTLplanSAT"
 
 main :: IO ()
 main = do
-  args <- getArgs
-  case args of
-    [domain, problem] -> void $ solvePDDL domain problem
-    _ -> do
-      putStrLn "Welcome to LTLplanSAT"
-      putStrLn description
-      loop
+  cmd <- execParser parser
+  case cmd of
+    PDDL domain problem options -> solvePDDL options domain problem
+    SAS file options -> void $ solveSAS options file
+    Rovers n options -> exampleRover options n
+    Airport n options -> exampleAirport options n

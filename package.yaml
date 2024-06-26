@@ -25,6 +25,7 @@ dependencies:
 - ghc >= 9.6.5
 - random >= 1.2.1.2
 - extra >= 1.7.16
+- optparse-applicative
 
 ghc-options:
 - -Wall
@@ -41,7 +42,7 @@ library:
   source-dirs: src
 
 executables:
-  LTLplanSAT-exe:
+  LTLplanSAT:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
