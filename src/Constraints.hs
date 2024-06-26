@@ -12,8 +12,10 @@ import Control.Monad (replicateM)
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Data.Map (Map, (!))
+import Data.Set (Set)
+import qualified Data.Set as Set
 import qualified Ersatz as E
-import Types (Fact (..), Time, Variable (AtomV))
+import Types (Atom, Fact (..), Time, Variable (AtomV))
 
 -- This class captures the functionallity that is requires for constraints.
 -- The instance of the functor class ensures that the facts of constraints (which are typically read as bytestrings),
@@ -21,12 +23,17 @@ import Types (Fact (..), Time, Variable (AtomV))
 class Constraints c where
   constraintsToSAT :: (E.MonadSAT s m) => c -> Time -> Map Variable E.Bit -> m ()
 
+  constraintsAtoms :: c -> Set Atom
+
   showConstraints :: c -> ByteString
 
 data NoConstraint = NoConstraint
 
 instance Constraints NoConstraint where
   constraintsToSAT _ _ _ = return ()
+
+  constraintsAtoms _ = Set.empty
+
   showConstraints NoConstraint = C8.pack "No constraints"
 
 value :: Map Variable E.Bit -> Time -> Fact -> E.Bit

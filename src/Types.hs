@@ -124,5 +124,7 @@ data Encoding = Sequential | ExistsStep
 
 data Options = Options
   { softConstraintsProbability :: Double,
+    convertToLTL :: Bool,
+    maxTimeSteps :: Int,
     encoding :: Encoding
   }

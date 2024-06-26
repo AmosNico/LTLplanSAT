@@ -14,9 +14,10 @@ import Control.Monad (filterM)
 import qualified Data.ByteString.Char8 as C8
 import Data.Functor (void)
 import Data.List ((\\))
+import qualified Data.Set as Set
 import qualified Ersatz as E
 import System.Random (randomRIO)
-import Types (Fact)
+import Types (Fact, factToAtom)
 
 data PDDLConstraint
   = AtEnd Fact
@@ -60,9 +61,9 @@ instance Constraints PDDLConstraint where
   constraintsToSAT (Always f) k v = E.assert $ alwaysBetween 0 k f v
   constraintsToSAT (Sometime f) k v = E.assert $ sometimeBetween 0 k f v
   constraintsToSAT (Within n f) k v = E.assert $ sometimeBetween 0 (min n k) f v
-  constraintsToSAT (AtMostOnce f) k v = 
+  constraintsToSAT (AtMostOnce f) k v =
     -- f should become true at most once
-    void $ atMostOne [E.not (value v (t-1) f) E.&& value v t f | t <- [1 .. k]]
+    void $ atMostOne [E.not (value v (t - 1) f) E.&& value v t f | t <- [1 .. k]]
   constraintsToSAT (SometimeAfter f1 f2) k v = E.assert $ E.and [value v t1 f1 E.==> after t1 | t1 <- [0 .. k]]
     where
       after t1 = sometimeBetween (t1 + 1) k f2 v
@@ -75,10 +76,23 @@ instance Constraints PDDLConstraint where
   constraintsToSAT (HoldDuring n1 n2 f) k v = E.assert $ if k < n2 then E.false else alwaysBetween n1 (n2 - 1) f v
   constraintsToSAT (HoldAfter n f) k v = E.assert $ if k < n then E.false else alwaysBetween n k f v
 
+  constraintsAtoms (AtEnd f) = Set.singleton $ factToAtom f
+  constraintsAtoms (Always f) = Set.singleton $ factToAtom f
+  constraintsAtoms (Sometime f) = Set.singleton $ factToAtom f
+  constraintsAtoms (Within _ f) = Set.singleton $ factToAtom f
+  constraintsAtoms (AtMostOnce f) = Set.singleton $ factToAtom f
+  constraintsAtoms (SometimeAfter f1 f2) = Set.fromList $ map factToAtom [f1, f2]
+  constraintsAtoms (SometimeBefore f1 f2) = Set.fromList $ map factToAtom [f1, f2]
+  constraintsAtoms (AlwaysWithin _ f1 f2) = Set.fromList $ map factToAtom [f1, f2]
+  constraintsAtoms (HoldDuring _ _ f) = Set.singleton $ factToAtom f
+  constraintsAtoms (HoldAfter _ f) = Set.singleton $ factToAtom f
+
   showConstraints c = C8.pack $ show c
 
 instance Constraints PDDLConstraints where
   constraintsToSAT (PDDLConstraints hc sc _) t v = mapM_ (\c -> constraintsToSAT c t v) (hc ++ sc)
+
+  constraintsAtoms (PDDLConstraints hc sc _) = Set.unions $ map constraintsAtoms $ hc ++ sc
 
   showConstraints (PDDLConstraints hc sc ic) =
     C8.concat

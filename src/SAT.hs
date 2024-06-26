@@ -2,16 +2,16 @@
 
 module SAT (solve) where
 
-import Control.Monad.State.Lazy (StateT)
 import Constraints (Constraints (constraintsToSAT), atMostOne, value)
+import Control.Monad.State.Lazy (StateT)
 import Data.Map (Map, (!))
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
+import qualified Data.Set as Set
 import qualified Ersatz as E
+import ExistsStepSAT (existsStep, extractExistsStepPlan)
 import PlanningTask
 import Types
-import qualified Data.Set as Set
-import ExistsStepSAT (existsStep, extractExistsStepPlan)
 
 defineVariables :: (E.MonadSAT s m) => PlanningTask c -> Time -> m (Map Variable E.Bit)
 defineVariables pt k = sequence $ Map.fromList $ map (,E.exists) (actionVars ++ atomVars)
@@ -47,12 +47,14 @@ ptToSAT pt k v =
     ]
 
 mutexesToSAT :: (E.MonadSAT s m) => PlanningTask c -> Time -> Map Variable E.Bit -> m ()
-mutexesToSAT pt t v = mapM_ mutexToSAT (ptMutexGroups pt) where
-  mutexToSAT (MutexGroup facts) = atMostOne $ map (value v t) facts
+mutexesToSAT pt t v = mapM_ mutexToSAT (ptMutexGroups pt)
+  where
+    mutexToSAT (MutexGroup facts) = atMostOne $ map (value v t) facts
 
 noParallelActions :: (E.MonadSAT s m) => PlanningTask c -> Time -> Map Variable E.Bit -> m ()
-noParallelActions pt k v = sequence_  [atMostOneAction t | t <- [1..k]] where
-  atMostOneAction t = atMostOne $ map (\a -> v ! ActionV t a) $ ptActions pt
+noParallelActions pt k v = sequence_ [atMostOneAction t | t <- [1 .. k]]
+  where
+    atMostOneAction t = atMostOne $ map (\a -> v ! ActionV t a) $ ptActions pt
 
 initializeProblem :: (Constraints c) => PlanningTask c -> Options -> Time -> StateT E.SAT IO (Map Variable E.Bit)
 initializeProblem pt options k = do
@@ -98,9 +100,13 @@ iterativeSolve pt options k = do
   (res, mSolution) <- callSAT pt options k
   case res of
     E.Unsatisfied ->
-      if k <= 100
+      if k <= maxTimeSteps options
         then iterativeSolve pt options (ceiling (fromIntegral k * sqrt 2 :: Double))
-        else fail "Giving up. There exists no plan of length 100 or less, the chosen constraints might be unsatisfiable."
+        else
+          fail $
+            "Giving up. There exists no plan of length"
+              ++ show (maxTimeSteps options)
+              ++ " or less, the chosen constraints might be unsatisfiable."
     E.Unsolved -> fail "The SAT-solver could not solve the planning problem."
     E.Satisfied -> case mSolution of
       Nothing -> fail "The SAT-solver said the planning problem is solvable, but did not return a solution."

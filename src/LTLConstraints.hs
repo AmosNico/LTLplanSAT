@@ -4,10 +4,11 @@ import Constraints (Constraints (..), value)
 import Control.Exception (assert)
 import qualified Data.ByteString.Char8 as C8
 import Data.Map (Map)
+import qualified Data.Set as Set
 import qualified Ersatz as E
 import GHC.Utils.Misc (nTimes)
+import PDDLConstraints (PDDLConstraint (..))
 import Types
-import PDDLConstraints (PDDLConstraint(..))
 
 data LTLConstraint
   = Prop Fact
@@ -50,18 +51,30 @@ weakUntil c1 c2 = Or [Until c1 c2, Globally c1]
 instance Constraints LTLConstraint where
   constraintsToSAT c k v = E.assert $ toSAT c 0 k v
 
+  constraintsAtoms (Prop fact) = Set.singleton $ factToAtom fact
+  constraintsAtoms (Not c) = constraintsAtoms c
+  constraintsAtoms (And cs) = Set.unions $ map constraintsAtoms cs
+  constraintsAtoms (Or cs) = Set.unions $ map constraintsAtoms cs
+  constraintsAtoms (Eventually c) = constraintsAtoms c
+  constraintsAtoms (Globally c) = constraintsAtoms c
+  constraintsAtoms (Until c1 c2) = Set.union (constraintsAtoms c1) (constraintsAtoms c2)
+  constraintsAtoms (Next c) = constraintsAtoms c
+  constraintsAtoms (WeakNext c) = constraintsAtoms c
+  constraintsAtoms (Finally c) = constraintsAtoms c
+
   showConstraints c = C8.pack $ show c
 
 pddlToLTL :: PDDLConstraint -> LTLConstraint
 pddlToLTL (AtEnd p) = Finally $ Prop p
 pddlToLTL (Always p) = Globally $ Prop p
 pddlToLTL (Sometime p) = Eventually $ Prop p
-pddlToLTL (Within t p) = Or $ map (\i -> over i $ Prop p) [0..t]
+pddlToLTL (Within t p) = Or $ map (\i -> over i $ Prop p) [0 .. t]
 pddlToLTL (AtMostOnce p) =
   Globally $ Prop p ==> weakUntil (Prop p) (Not $ Prop p)
-pddlToLTL (SometimeBefore p q) = weakUntil
-  (And [Not $ Prop p, Not $ Prop q])
-  (And [Not $ Prop p, Prop q])
+pddlToLTL (SometimeBefore p q) =
+  weakUntil
+    (And [Not $ Prop p, Not $ Prop q])
+    (And [Not $ Prop p, Prop q])
 pddlToLTL (SometimeAfter p q) =
   Globally $ Prop p ==> Eventually (Prop q)
 pddlToLTL (AlwaysWithin t p q) = Globally $ Prop p ==> pddlToLTL (Within t q)

@@ -22,7 +22,7 @@ solveSAS path constraints = do
   putStrLn "Translating to STRIPS."
   let pt = fromSAS sas constraints
   -- printPlanningTask pt
-  plan <- solve pt $ Options 0 ExistsStep
+  plan <- solve pt $ Options 0 True 50 ExistsStep
   print plan
   return plan
 

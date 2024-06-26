@@ -15,7 +15,7 @@ data ParseError = ParseError String String
 
 instance Show ParseError where
   show (ParseError expected found) =
-    "Unexpected input while parsing SAS file: Expected "
+    "Unexpected input while parsing SAS-file: Expected "
       ++ expected
       ++ ", but got "
       ++ found
