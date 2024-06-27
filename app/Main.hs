@@ -2,14 +2,18 @@ module Main (main) where
 
 import Control.Monad (void)
 import Options.Applicative
-import Solver (exampleAirport, exampleRover, solvePDDL, solveSAS)
+import Solver (Encoding (..), Options (..), exampleAirport, exampleRover, solvePDDL, solveSAS)
 import Text.Read (readMaybe)
-import Types (Encoding (..), Options (..))
 
 parseSCP :: Parser Double
-parseSCP = option auto (long name <> metavar "PROBABILITY" <> value 0 <> help description)
+parseSCP = option auto modifier
   where
-    name = "soft-constraint"
+    modifier =
+      long "soft-constraint"
+        <> metavar "PROBABILITY"
+        <> value 0
+        <> showDefault
+        <> help description
     description = "The probability that each soft constraint is converted to a hard constraint."
 
 parseConvertToLTL :: Parser Bool
@@ -17,10 +21,21 @@ parseConvertToLTL = switch (long "to-LTL" <> help description)
   where
     description = "Convert the pddl constraints to LTL before handing them to the SAT-solver."
 
-parseMaxSteps :: Parser Int
-parseMaxSteps = option auto (long name <> short 'M' <> metavar "INT" <> value 50 <> help description)
+parsePrintPT :: Parser Bool
+parsePrintPT = switch (short 'p' <> long "print-planning-task" <> help description)
   where
-    name = "max-time-steps"
+    description = "Show the the planning task that is given to the solver."
+
+parseMaxSteps :: Parser Int
+parseMaxSteps = option auto modifier
+  where
+    modifier =
+      long "max-time-steps"
+        <> short 'M'
+        <> metavar "INT"
+        <> value 50
+        <> showDefault
+        <> help description
     description =
       "The maximum number of timesteps the SAT-solver should try before judging "
         ++ "the problem to be unsolvable. Note that for the ExistsStep encoding this is not equal to "
@@ -34,16 +49,22 @@ readMaybeEncoding _ = Nothing
 parseEncoding :: Parser Encoding
 parseEncoding = option (maybeReader readMaybeEncoding) modifier
   where
-    modifier = long "encoding" <> short 'e' <> metavar "ENCODING" <> value ExistsStep <> help description
+    modifier =
+      long "encoding"
+        <> short 'e'
+        <> metavar "ENCODING"
+        <> value ExistsStep
+        <> showDefault
+        <> help description
     description =
       "The encoding used for the SAT-solver, this is either \"sequential\" for a sequential encoding "
         ++ "or \"exists-step\" for a parallel encoding using exists step."
 
 parsePDDLOptions :: Parser Options
-parsePDDLOptions = Options <$> parseSCP <*> parseConvertToLTL <*> parseMaxSteps <*> parseEncoding
+parsePDDLOptions = Options <$> parseSCP <*> parseConvertToLTL <*> parsePrintPT <*> parseMaxSteps <*> parseEncoding
 
 parseSASOptions :: Parser Options
-parseSASOptions = Options 0 False <$> parseMaxSteps <*> parseEncoding
+parseSASOptions = Options 0 False <$> parsePrintPT <*> parseMaxSteps <*> parseEncoding
 
 data Command
   = PDDL FilePath FilePath Options

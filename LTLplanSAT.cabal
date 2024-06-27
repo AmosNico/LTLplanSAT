@@ -24,6 +24,7 @@ source-repository head
 
 library
   exposed-modules:
+      Basic
       Constraints
       ExistsStepSAT
       LTLConstraints
@@ -32,9 +33,8 @@ library
       PDDLConstraints
       PlanningTask
       SAS
-      SAT
+      SequentialSAT
       Solver
-      Types
   other-modules:
       Paths_LTLplanSAT
   autogen-modules:

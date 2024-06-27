@@ -1,17 +1,28 @@
 {-# LANGUAGE TupleSections #-}
 
-module SAT (solve) where
+module SequentialSAT (basicSATEncoding, sequentialEncoding, Plan (..), extractSequentialPlan) where
 
 import Constraints (Constraints (constraintsToSAT), atMostOne, value)
 import Control.Monad.State.Lazy (StateT)
+import Data.List (intercalate)
 import Data.Map (Map, (!))
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
 import qualified Data.Set as Set
 import qualified Ersatz as E
-import ExistsStepSAT (existsStep, extractExistsStepPlan)
 import PlanningTask
-import Types
+import Basic
+
+newtype Plan = Plan [Action]
+
+instance Show Plan where
+  show (Plan as) =
+    "Plan with length "
+      ++ show (length as)
+      ++ " and cost "
+      ++ show (sum $ map actionCost as)
+      ++ ":\n  "
+      ++ intercalate "\n  " (map show as)
 
 defineVariables :: (E.MonadSAT s m) => PlanningTask c -> Time -> m (Map Variable E.Bit)
 defineVariables pt k = sequence $ Map.fromList $ map (,E.exists) (actionVars ++ atomVars)
@@ -37,14 +48,14 @@ frameAxiom pt fact t v = E.or $ [value v (t - 1) fact, value v t $ negateFact fa
     actions = map (\a -> v ! ActionV t a) $ filter (\a -> fact `elem` actionPost a) $ ptActions pt
 
 -- k is the maximum number of timesteps in the SAT encoding
-ptToSAT :: PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit
-ptToSAT pt k v =
-  E.and
-    [ initialToSAT pt v,
-      goalToSAT pt k v,
-      E.and [actionToSAT action t v | action <- ptActions pt, t <- [1 .. k]],
-      E.and [frameAxiom pt fact t v | fact <- ptFacts pt, t <- [1 .. k]]
-    ]
+basicSATEncoding :: PlanningTask c -> Time -> StateT E.SAT IO (Map Variable E.Bit)
+basicSATEncoding pt k = do
+  v <- defineVariables pt k
+  E.assert $ initialToSAT pt v
+  E.assert $ goalToSAT pt k v
+  E.assert $ E.and [actionToSAT action t v | action <- ptActions pt, t <- [1 .. k]]
+  E.assert $ E.and [frameAxiom pt fact t v | fact <- ptFacts pt, t <- [1 .. k]]
+  return v
 
 mutexesToSAT :: (E.MonadSAT s m) => PlanningTask c -> Time -> Map Variable E.Bit -> m ()
 mutexesToSAT pt t v = mapM_ mutexToSAT (ptMutexGroups pt)
@@ -56,23 +67,13 @@ noParallelActions pt k v = sequence_ [atMostOneAction t | t <- [1 .. k]]
   where
     atMostOneAction t = atMostOne $ map (\a -> v ! ActionV t a) $ ptActions pt
 
-initializeProblem :: (Constraints c) => PlanningTask c -> Options -> Time -> StateT E.SAT IO (Map Variable E.Bit)
-initializeProblem pt options k = do
-  vars <- defineVariables pt k
-  E.assert $ ptToSAT pt k vars
-  case encoding options of
-    Sequential -> noParallelActions pt k vars
-    ExistsStep -> existsStep pt k vars
+sequentialEncoding :: (Constraints c) => PlanningTask c -> Time -> StateT E.SAT IO (Map Variable E.Bit)
+sequentialEncoding pt k = do
+  vars <- basicSATEncoding pt k
+  noParallelActions pt k vars
   mutexesToSAT pt k vars
   constraintsToSAT (ptConstraints pt) k vars
   return vars
-
-callSAT :: (Constraints c) => PlanningTask c -> Options -> Time -> IO (E.Result, Maybe (Map Variable Bool))
-callSAT pt options k = do
-  putStrLn $ "Initialize SAT-description with maximal plan length " ++ show k ++ "."
-  let problem = initializeProblem pt options k
-  putStrLn "Calling SAT-solver."
-  E.solveWith E.cryptominisat5 problem
 
 extractSequentialPlan :: PlanningTask c -> Time -> Map Variable Bool -> Plan
 extractSequentialPlan pt k v = Plan $ mapMaybe extractAction [1 .. k]
@@ -89,29 +90,3 @@ extractSequentialPlan pt k v = Plan $ mapMaybe extractAction [1 .. k]
             ++ "namely "
             ++ show l
             ++ "."
-
-extractPlan :: Options -> PlanningTask c -> Time -> Map Variable Bool -> Plan
-extractPlan options pt k v = case encoding options of
-  Sequential -> extractSequentialPlan pt k v
-  ExistsStep -> extractExistsStepPlan pt k v
-
-iterativeSolve :: (Constraints c) => Options -> PlanningTask c ->  Time -> IO Plan
-iterativeSolve options pt k = do
-  (res, mSolution) <- callSAT pt options k
-  case res of
-    E.Unsatisfied ->
-      if k <= maxTimeSteps options
-        then iterativeSolve options pt (ceiling (fromIntegral k * sqrt 2 :: Double))
-        else
-          fail $
-            "Giving up. There exists no plan of length"
-              ++ show (maxTimeSteps options)
-              ++ " or less, the chosen constraints might be unsatisfiable."
-    E.Unsolved -> fail "The SAT-solver could not solve the planning problem."
-    E.Satisfied -> case mSolution of
-      Nothing -> fail "The SAT-solver said the planning problem is solvable, but did not return a solution."
-      Just solution -> return $ extractPlan options pt k solution
-
-solve :: (Constraints c) => Options -> PlanningTask c -> IO Plan
-solve options pt = do
-  iterativeSolve options pt 5

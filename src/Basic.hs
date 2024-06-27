@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Types
+module Basic
   ( Atom (..),
     showAtom,
     showAtoms,
@@ -17,17 +17,12 @@ module Types
     showAction,
     Time,
     Variable (..),
-    Plan (..),
-    writePlan,
-    Encoding (..),
-    Options (..),
   )
 where
 
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Foldable as Set
-import Data.List (intercalate)
 import Data.Set (Set)
 
 newtype Atom = Atom ByteString deriving (Eq, Ord, Show)
@@ -102,29 +97,3 @@ type Time = Int
 
 data Variable = ActionV Time Action | AtomV Time Atom
   deriving (Eq, Ord, Show)
-
-newtype Plan = Plan [Action]
-
-writePlan :: Plan -> IO ()
-writePlan (Plan as) =
-  C8.writeFile "plan.txt" $
-    C8.concat $
-      map (\a -> C8.concat ["(", actionName a, ")\n"]) as
-
-instance Show Plan where
-  show (Plan as) =
-    "Plan with length "
-      ++ show (length as)
-      ++ " and cost "
-      ++ show (sum $ map actionCost as)
-      ++ ":\n  "
-      ++ intercalate "\n  " (map show as)
-
-data Encoding = Sequential | ExistsStep
-
-data Options = Options
-  { softConstraintsProbability :: Double,
-    convertToLTL :: Bool,
-    maxTimeSteps :: Int,
-    encoding :: Encoding
-  }

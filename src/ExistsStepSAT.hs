@@ -1,8 +1,11 @@
 {-# LANGUAGE TupleSections #-}
 
-module ExistsStepSAT (existsStep, extractExistsStepPlan) where
+module ExistsStepSAT (existsStepEncoding, extractExistsStepPlan) where
 
+import Constraints
+import Control.Monad.State (StateT)
 import qualified Data.Graph as Graph
+import Data.List (sortOn)
 import Data.Map (Map, (!))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -10,8 +13,8 @@ import Data.Tree (flatten)
 import Data.Tuple.Extra (snd3)
 import qualified Ersatz as E
 import PlanningTask (PlanningTask (ptActions), ptFacts)
-import Types (Action (..), Plan (..), Time, Variable (ActionV), negateFact)
-import Data.List (sortOn)
+import SequentialSAT (basicSATEncoding, Plan(..))
+import Basic (Action (..), Time, Variable (ActionV), negateFact)
 
 -- Adjacency list for the disabling graph.
 -- We don't use nodes (first argument), just keys (second argument).
@@ -80,6 +83,15 @@ existsStep pt k v = sequence_ [constraint t fact scc | scc <- disablingGraphSCC 
     constraint t fact scc = do
       chain (variables t scc) (isErasing fact) (isRequiring fact) v
       chain (variables t $ reverse scc) (isErasing fact) (isRequiring fact) v
+
+-- TODO: constraints
+existsStepEncoding :: (Constraints c) => PlanningTask c -> Time -> StateT E.SAT IO (Map Variable E.Bit)
+existsStepEncoding pt k = do
+  vars <- basicSATEncoding pt k
+  existsStep pt k vars
+  -- mutexesToSAT pt k vars
+  -- constraintsToSAT (ptConstraints pt) k vars
+  return vars
 
 extractExistsStepPlan :: PlanningTask c -> Time -> Map Variable Bool -> Plan
 extractExistsStepPlan pt k v = Plan $ concatMap extractActions [1 .. k]

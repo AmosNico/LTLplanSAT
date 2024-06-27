@@ -17,7 +17,7 @@ import Data.List ((\\))
 import qualified Data.Set as Set
 import qualified Ersatz as E
 import System.Random (randomRIO)
-import Types (Fact, factToAtom)
+import Basic (Fact, factToAtom)
 
 data PDDLConstraint
   = AtEnd Fact

@@ -8,7 +8,7 @@ import qualified Data.Set as Set
 import qualified Ersatz as E
 import GHC.Utils.Misc (nTimes)
 import PDDLConstraints (PDDLConstraint (..))
-import Types
+import Basic
 
 data LTLConstraint
   = Prop Fact

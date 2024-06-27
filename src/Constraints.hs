@@ -15,7 +15,7 @@ import Data.Map (Map, (!))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Ersatz as E
-import Types (Atom, Fact (..), Time, Variable (AtomV))
+import Basic (Atom, Fact (..), Time, Variable (AtomV))
 
 -- This class captures the functionallity that is requires for constraints.
 -- The instance of the functor class ensures that the facts of constraints (which are typically read as bytestrings),

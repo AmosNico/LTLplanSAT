@@ -1,28 +1,87 @@
-module Solver (solveSAS, solvePDDL, exampleRover, exampleAirport) where
+{-# LANGUAGE OverloadedStrings #-}
+
+module Solver (Encoding (..), Options (..), solveSAS, solvePDDL, exampleRover, exampleAirport) where
 
 import Constraints (Constraints, NoConstraint (NoConstraint), showConstraints)
-import Control.Monad (void)
+import Control.Monad (void, when)
 import qualified Data.ByteString.Char8 as C8
+import Data.Map (Map)
+import qualified Ersatz as E
+import ExistsStepSAT (existsStepEncoding, extractExistsStepPlan)
 import PDDLConstraints (selectSoftConstraints)
 import ParsePDDLConstraints (parsePDDLConstraints)
 import ParseSAS (readSAS)
-import PlanningTask (fromSAS)
-import SAT (solve)
+import PlanningTask (PlanningTask, fromSAS, printPlanningTask)
+import SequentialSAT (Plan (..), extractSequentialPlan, sequentialEncoding)
 import System.Process (callProcess, readProcess)
-import Types (Options (..), Plan, writePlan)
+import Basic (Time, Variable, Action (..))
+
+data Encoding = Sequential | ExistsStep
+
+instance Show Encoding where
+  show Sequential = "sequential"
+  show ExistsStep = "exists-step"
+
+data Options = Options
+  { softConstraintsProbability :: Double,
+    convertToLTL :: Bool,
+    outputPlanningTask :: Bool,
+    maxTimeSteps :: Int,
+    encoding :: Encoding
+  }
+
+callSAT :: (Constraints c) => PlanningTask c -> Options -> Time -> IO (E.Result, Maybe (Map Variable Bool))
+callSAT pt options k = do
+  putStrLn $ "Initialize SAT-description with maximal plan length " ++ show k ++ "."
+  let problem = case encoding options of
+        Sequential -> sequentialEncoding pt k
+        ExistsStep -> existsStepEncoding pt k
+  putStrLn "Calling SAT-solver."
+  E.solveWith E.cryptominisat5 problem
+
+extractPlan :: Options -> PlanningTask c -> Time -> Map Variable Bool -> Plan
+extractPlan options pt k v = case encoding options of
+  Sequential -> extractSequentialPlan pt k v
+  ExistsStep -> extractExistsStepPlan pt k v
+
+iterativeSolve :: (Constraints c) => Options -> PlanningTask c -> Time -> IO Plan
+iterativeSolve options pt k = do
+  (res, mSolution) <- callSAT pt options k
+  case res of
+    E.Unsatisfied ->
+      if k <= maxTimeSteps options
+        then iterativeSolve options pt (ceiling (fromIntegral k * sqrt 2 :: Double))
+        else
+          fail $
+            "Giving up. There exists no plan of length"
+              ++ show (maxTimeSteps options)
+              ++ " or less, the chosen constraints might be unsatisfiable."
+    E.Unsolved -> fail "The SAT-solver could not solve the planning problem."
+    E.Satisfied -> case mSolution of
+      Nothing -> fail "The SAT-solver said the planning problem is solvable, but did not return a solution."
+      Just solution -> return $ extractPlan options pt k solution
+
+solve :: (Constraints c) => Options -> PlanningTask c -> IO Plan
+solve options pt = iterativeSolve options pt 5
 
 solveSAS' :: (Constraints c) => Options -> c -> FilePath -> IO Plan
 solveSAS' options constraints path = do
   sas <- readSAS path
   putStrLn "Translating to STRIPS."
   let pt = fromSAS sas constraints
-  -- printPlanningTask pt
+  when (outputPlanningTask options) $ printPlanningTask pt
   plan <- solve options pt
   print plan
   return plan
 
 solveSAS :: Options -> FilePath -> IO Plan
 solveSAS options = solveSAS' options NoConstraint
+
+writePlan :: Plan -> IO ()
+writePlan (Plan as) =
+  C8.writeFile "plan.txt" $
+    C8.concat $
+      map (\a -> C8.concat ["(", actionName a, ")\n"]) as
 
 validatePlan :: FilePath -> FilePath -> Plan -> IO ()
 validatePlan domain problem plan = do

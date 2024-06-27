@@ -21,7 +21,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Set as Set
 import SAS (SAS)
 import qualified SAS
-import Types
+import Basic
 
 data PlanningTask constraintType = PlanningTask
   { ptAtoms :: [Atom],

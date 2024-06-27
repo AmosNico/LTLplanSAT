@@ -13,7 +13,7 @@ import Text.Megaparsec (Parsec, between, choice, empty, eof, many, noneOf, parse
 import Text.Megaparsec.Char (alphaNumChar, char, space1, string)
 import Text.Megaparsec.Char.Lexer (decimal, skipLineComment, space, symbol)
 import Text.Megaparsec.Stream (Token)
-import Types (Fact (PosAtom), Atom (Atom))
+import Basic (Fact (PosAtom), Atom (Atom))
 
 type Input = Text
 
