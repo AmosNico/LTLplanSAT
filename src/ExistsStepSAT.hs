@@ -14,7 +14,7 @@ import Data.Tuple.Extra (snd3)
 import qualified Ersatz as E
 import PlanningTask (PlanningTask (ptActions), ptFacts)
 import SequentialSAT (basicSATEncoding, Plan(..))
-import Basic (Action (..), Time, Variable (ActionV), negateFact)
+import Basic (Action (..), Time, Variable (ActionVar), negateFact)
 
 -- Adjacency list for the disabling graph.
 -- We don't use nodes (first argument), just keys (second argument).
@@ -69,13 +69,13 @@ chain l isErasing isRequiring v = do
   E.assert $ E.and $ c1 ++ c2 ++ c3
 
 variableToAction :: Variable -> Action
-variableToAction (ActionV _ action) = action
+variableToAction (ActionVar _ action) = action
 variableToAction v = error $ "Expected an action variable, but got " ++ show v
 
 existsStep :: (E.MonadSAT s m) => PlanningTask c -> Time -> Map Variable E.Bit -> m ()
 existsStep pt k v = sequence_ [constraint t fact scc | scc <- disablingGraphSCC pt, fact <- ptFacts pt, t <- [1 .. k]]
   where
-    variables t = map (ActionV t)
+    variables t = map (ActionVar t)
     isErasing fact variable = negateFact fact `elem` actionPost (variableToAction variable)
     isRequiring fact variable = fact `elem` actionPre (variableToAction variable)
     -- for each timestep, fact and scc, require that scc does not contain
@@ -97,4 +97,4 @@ extractExistsStepPlan :: PlanningTask c -> Time -> Map Variable Bool -> Plan
 extractExistsStepPlan pt k v = Plan $ concatMap extractActions [1 .. k]
   where
     sortActions = sortOn (orderActions pt)
-    extractActions t = sortActions $ filter (\a -> v ! ActionV t a) $ ptActions pt
+    extractActions t = sortActions $ filter (\a -> v ! ActionVar t a) $ ptActions pt

@@ -95,5 +95,5 @@ showAction (Action name pre post cost) =
 
 type Time = Int
 
-data Variable = ActionV Time Action | AtomV Time Atom
+data Variable = ActionVar Time Action | AtomVar Time Atom
   deriving (Eq, Ord, Show)

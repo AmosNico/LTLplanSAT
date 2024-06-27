@@ -15,7 +15,7 @@ import Data.Map (Map, (!))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Ersatz as E
-import Basic (Atom, Fact (..), Time, Variable (AtomV))
+import Basic (Atom, Fact (..), Time, Variable (AtomVar))
 
 -- This class captures the functionallity that is requires for constraints.
 -- The instance of the functor class ensures that the facts of constraints (which are typically read as bytestrings),
@@ -37,8 +37,8 @@ instance Constraints NoConstraint where
   showConstraints NoConstraint = C8.pack "No constraints"
 
 value :: Map Variable E.Bit -> Time -> Fact -> E.Bit
-value v t (PosAtom atom) = v ! AtomV t atom
-value v t (NegAtom atom) = E.not $ v ! AtomV t atom
+value v t (PosAtom atom) = v ! AtomVar t atom
+value v t (NegAtom atom) = E.not $ v ! AtomVar t atom
 
 sometimeBetween :: Time -> Time -> Fact -> Map Variable E.Bit -> E.Bit
 sometimeBetween t1 t2 f v = E.or [value v t f | t <- [t1 .. t2]]
