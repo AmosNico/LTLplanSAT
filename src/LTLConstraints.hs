@@ -1,4 +1,4 @@
-module LTLConstraints (LTLConstraint (..), pddlToLTL) where
+module LTLConstraints (LTLConstraint (..), pddlConstraintsToLTL) where
 
 import Constraints (Constraints (..), value)
 import Control.Exception (assert)
@@ -7,7 +7,7 @@ import Data.Map (Map)
 import qualified Data.Set as Set
 import qualified Ersatz as E
 import GHC.Utils.Misc (nTimes)
-import PDDLConstraints (PDDLConstraint (..))
+import PDDLConstraints (PDDLConstraint (..), PDDLConstraints (..))
 import Basic
 
 data LTLConstraint
@@ -62,7 +62,7 @@ instance Constraints LTLConstraint where
   constraintsAtoms (WeakNext c) = constraintsAtoms c
   constraintsAtoms (Finally c) = constraintsAtoms c
 
-  showConstraints c = C8.pack $ show c
+  showConstraints c = C8.pack $ "\nLTL-constraint:\n" ++ show c
 
 pddlToLTL :: PDDLConstraint -> LTLConstraint
 pddlToLTL (AtEnd p) = Finally $ Prop p
@@ -80,3 +80,7 @@ pddlToLTL (SometimeAfter p q) =
 pddlToLTL (AlwaysWithin t p q) = Globally $ Prop p ==> pddlToLTL (Within t q)
 pddlToLTL (HoldDuring t1 t2 p) = over t1 $ pddlToLTL (Within (t2 - 1 - t1) p)
 pddlToLTL (HoldAfter t p) = over t $ Globally $ Prop p
+
+
+pddlConstraintsToLTL :: PDDLConstraints -> LTLConstraint
+pddlConstraintsToLTL (PDDLConstraints hc sc _) = And $ map pddlToLTL $ hc ++ sc

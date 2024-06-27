@@ -17,7 +17,7 @@ import SequentialSAT (basicSATEncoding, Plan(..))
 import Basic (Action (..), Time, Variable (ActionVar), negateFact)
 
 -- Adjacency list for the disabling graph.
--- We don't use nodes (first argument), just keys (second argument).
+-- We don't use nodes (first element), just keys (second element).
 disablingGraphEdges :: PlanningTask c -> [((), Action, [Action])]
 disablingGraphEdges pt = map (\a -> ((), a, disables a)) $ ptActions pt
   where
@@ -84,12 +84,11 @@ existsStep pt k v = sequence_ [constraint t fact scc | scc <- disablingGraphSCC 
       chain (variables t scc) (isErasing fact) (isRequiring fact) v
       chain (variables t $ reverse scc) (isErasing fact) (isRequiring fact) v
 
--- TODO: constraints
+-- TODO: some constraints don't allow parallel actions constraints 
 existsStepEncoding :: (Constraints c) => PlanningTask c -> Time -> StateT E.SAT IO (Map Variable E.Bit)
 existsStepEncoding pt k = do
   vars <- basicSATEncoding pt k
   existsStep pt k vars
-  -- mutexesToSAT pt k vars
   -- constraintsToSAT (ptConstraints pt) k vars
   return vars
 

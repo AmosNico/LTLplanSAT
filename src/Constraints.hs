@@ -18,8 +18,6 @@ import qualified Ersatz as E
 import Basic (Atom, Fact (..), Time, Variable (AtomVar))
 
 -- This class captures the functionallity that is requires for constraints.
--- The instance of the functor class ensures that the facts of constraints (which are typically read as bytestrings),
--- can be transformed into the integers that PlanningTask uses.
 class Constraints c where
   constraintsToSAT :: (E.MonadSAT s m) => c -> Time -> Map Variable E.Bit -> m ()
 
@@ -46,6 +44,7 @@ sometimeBetween t1 t2 f v = E.or [value v t f | t <- [t1 .. t2]]
 alwaysBetween :: Time -> Time -> Fact -> Map Variable E.Bit -> E.Bit
 alwaysBetween t1 t2 f v = E.and [value v t f | t <- [t1 .. t2]]
 
+-- TODO: quadratic encoding for smaller of (length l)
 atMostOne :: (E.MonadSAT s m) => [E.Bit] -> m E.Bits
 atMostOne l = do
   let n = ceiling (logBase 2 $ fromIntegral $ length l :: Double)

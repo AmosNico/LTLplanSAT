@@ -60,11 +60,28 @@ parseEncoding = option (maybeReader readMaybeEncoding) modifier
       "The encoding used for the SAT-solver, this is either \"sequential\" for a sequential encoding "
         ++ "or \"exists-step\" for a parallel encoding using exists step."
 
+parseValidate :: Parser Bool
+parseValidate = switch (long "VAL" <> help description)
+  where
+    description = "Validate the found solution with VAL."
+
 parsePDDLOptions :: Parser Options
-parsePDDLOptions = Options <$> parseSCP <*> parseConvertToLTL <*> parsePrintPT <*> parseMaxSteps <*> parseEncoding
+parsePDDLOptions =
+  Options
+    <$> parseSCP
+    <*> parseConvertToLTL
+    <*> parsePrintPT
+    <*> parseMaxSteps
+    <*> parseEncoding
+    <*> parseValidate
 
 parseSASOptions :: Parser Options
-parseSASOptions = Options 0 False <$> parsePrintPT <*> parseMaxSteps <*> parseEncoding
+parseSASOptions =
+  Options 0 False
+    <$> parsePrintPT
+    <*> parseMaxSteps
+    <*> parseEncoding
+    <*> pure False
 
 data Command
   = PDDL FilePath FilePath Options

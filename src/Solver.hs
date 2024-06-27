@@ -2,19 +2,20 @@
 
 module Solver (Encoding (..), Options (..), solveSAS, solvePDDL, exampleRover, exampleAirport) where
 
-import Constraints (Constraints, NoConstraint (NoConstraint), showConstraints)
+import Basic (Action (..), Time, Variable)
+import Constraints (Constraints, NoConstraint (NoConstraint))
 import Control.Monad (void, when)
 import qualified Data.ByteString.Char8 as C8
 import Data.Map (Map)
 import qualified Ersatz as E
 import ExistsStepSAT (existsStepEncoding, extractExistsStepPlan)
+import LTLConstraints (pddlConstraintsToLTL)
 import PDDLConstraints (selectSoftConstraints)
 import ParsePDDLConstraints (parsePDDLConstraints)
 import ParseSAS (readSAS)
 import PlanningTask (PlanningTask, fromSAS, printPlanningTask)
 import SequentialSAT (Plan (..), extractSequentialPlan, sequentialEncoding)
 import System.Process (callProcess, readProcess)
-import Basic (Time, Variable, Action (..))
 
 data Encoding = Sequential | ExistsStep
 
@@ -27,7 +28,8 @@ data Options = Options
     convertToLTL :: Bool,
     outputPlanningTask :: Bool,
     maxTimeSteps :: Int,
-    encoding :: Encoding
+    encoding :: Encoding,
+    optValidate :: Bool
   }
 
 callSAT :: (Constraints c) => PlanningTask c -> Options -> Time -> IO (E.Result, Maybe (Map Variable Bool))
@@ -89,7 +91,6 @@ validatePlan domain problem plan = do
   writePlan plan
   callProcess "Val\\bin\\validate.exe" [domain, problem, "plan.txt"]
 
--- TODO constraints
 solvePDDL :: Options -> FilePath -> FilePath -> IO ()
 solvePDDL options domain problem = do
   putStrLn "Calling Fast-Downward to translate to SAS."
@@ -97,9 +98,11 @@ solvePDDL options domain problem = do
   putStrLn "Translation to SAS succeded."
   constraints <- parsePDDLConstraints problem
   constraints' <- selectSoftConstraints constraints (softConstraintsProbability options)
-  C8.putStrLn $ showConstraints constraints'
-  plan <- solveSAS' options constraints' "output.sas"
-  validatePlan domain problem plan
+  plan <-
+    if convertToLTL options
+      then solveSAS' options (pddlConstraintsToLTL constraints') "output.sas"
+      else solveSAS' options constraints' "output.sas"
+  when (optValidate options) $ validatePlan domain problem plan
 
 exampleRover :: Options -> Int -> IO ()
 exampleRover options n = solvePDDL options domain problem
