@@ -89,12 +89,12 @@ validatePlan :: FilePath -> FilePath -> Plan -> IO ()
 validatePlan domain problem plan = do
   putStrLn "Checking the plan using Val."
   writePlan plan
-  callProcess "Val\\bin\\validate.exe" [domain, problem, "plan.txt"]
+  callProcess "Val/bin/validate.exe" [domain, problem, "plan.txt"]
 
 solvePDDL :: Options -> FilePath -> FilePath -> IO ()
 solvePDDL options domain problem = do
   putStrLn "Calling Fast-Downward to translate to SAS."
-  void $ readProcess "python" ["src\\translate\\translate.py", "--keep-unimportant-variables", domain, problem] ""
+  void $ readProcess "python" ["fast-downward/src/translate/translate.py", "--keep-unimportant-variables", domain, problem] ""
   putStrLn "Translation to SAS succeded."
   constraints <- parsePDDLConstraints problem
   constraints' <- selectSoftConstraints constraints (softConstraintsProbability options)
@@ -108,8 +108,8 @@ exampleRover :: Options -> Int -> IO ()
 exampleRover options n = solvePDDL options domain problem
   where
     version = if n < 10 then "0" ++ show n else show n
-    domain = "examples PDDL\\IPC5 - rovers\\QualitativePreferences\\domain.pddl"
-    problem = "examples PDDL\\IPC5 - rovers\\QualitativePreferences\\p" ++ version ++ ".pddl"
+    domain = "examples PDDL/IPC5 - rovers/QualitativePreferences/domain.pddl"
+    problem = "examples PDDL/IPC5 - rovers/QualitativePreferences/p" ++ version ++ ".pddl"
 
 exampleAirport :: Options -> Int -> IO ()
-exampleAirport options n = void $ solveSAS options ("examples SAS\\" ++ show n ++ ".in")
+exampleAirport options n = void $ solveSAS options ("examples SAS/" ++ show n ++ ".in")
