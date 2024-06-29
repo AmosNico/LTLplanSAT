@@ -54,8 +54,8 @@ library
     , optparse-applicative
     , process >=1.6.19.0
     , random >=1.2.1.2
-    , text >=2.0.2
     , vector >=0.13.1.0
+    , word8 >=0.1.3
   default-language: Haskell2010
 
 executable LTLplanSAT
@@ -80,8 +80,8 @@ executable LTLplanSAT
     , optparse-applicative
     , process >=1.6.19.0
     , random >=1.2.1.2
-    , text >=2.0.2
     , vector >=0.13.1.0
+    , word8 >=0.1.3
   default-language: Haskell2010
 
 test-suite LTLplanSAT-test
@@ -107,6 +107,6 @@ test-suite LTLplanSAT-test
     , optparse-applicative
     , process >=1.6.19.0
     , random >=1.2.1.2
-    , text >=2.0.2
     , vector >=0.13.1.0
+    , word8 >=0.1.3
   default-language: Haskell2010

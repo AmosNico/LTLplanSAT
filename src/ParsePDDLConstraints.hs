@@ -2,46 +2,44 @@
 
 module ParsePDDLConstraints (parsePDDLConstraints) where
 
-import PDDLConstraints (PDDLConstraint (..), PDDLConstraints (..), singleHard, singleSoft)
+import Basic (Atom (Atom), Fact (PosAtom))
 import Control.Monad (void)
+import qualified Data.ByteString as BS
+import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as C8
-import Data.List (intercalate)
-import Data.Text (Text)
-import qualified Data.Text.IO as TextIO
 import Data.Void (Void)
+import Data.Word8 (_parenleft, _parenright, _underscore)
+import PDDLConstraints (PDDLConstraint (..), PDDLConstraints (..), singleHard, singleSoft)
 import Text.Megaparsec (Parsec, between, choice, empty, eof, many, noneOf, parseMaybe, some, try, (<?>), (<|>))
-import Text.Megaparsec.Char (alphaNumChar, char, space1, string)
-import Text.Megaparsec.Char.Lexer (decimal, skipLineComment, space, symbol)
+import Text.Megaparsec.Byte (alphaNumChar, char, space1, string)
+import Text.Megaparsec.Byte.Lexer (decimal, skipLineComment, space, symbol)
 import Text.Megaparsec.Stream (Token)
-import Basic (Fact (PosAtom), Atom (Atom))
 
-type Input = Text
-
-type Parser = Parsec Void Input
+type Parser = Parsec Void ByteString
 
 pSpace :: Parser ()
 pSpace = space space1 (skipLineComment ";") empty <?> "space or comment"
 
-pSymbol :: Input -> Parser Input
+pSymbol :: ByteString -> Parser ByteString
 pSymbol = symbol pSpace
 
 parens :: Parser a -> Parser a
 parens p = between (pSymbol "(") (pSymbol ")") p <?> "parentheses"
 
-someBut :: [Token Input] -> Parser [Token Input]
+someBut :: [Token ByteString] -> Parser [Token ByteString]
 someBut l = some $ noneOf l
 
-parseName :: Parser [Token Input]
-parseName = some (alphaNumChar <|> char '_')
+parseName :: Parser ByteString
+parseName = BS.pack <$> some (alphaNumChar <|> char _underscore)
 
 parsePredicate :: Parser Fact
 parsePredicate = parens $ do
   name <- parseName
   space1
   args <- some (parseName <* pSpace)
-  return $ PosAtom $ Atom $ C8.pack $ name ++ "(" ++ intercalate ", " args ++ ")"
+  return $ PosAtom $ Atom $ C8.concat [name, "(", C8.intercalate ", " args, ")"]
 
-pKey :: Input -> Parser Input
+pKey :: ByteString -> Parser ByteString
 pKey keyword = string keyword <* pSpace
 
 parsePDDLConstraint :: Parser PDDLConstraint
@@ -72,9 +70,9 @@ parseConstraint :: Parser PDDLConstraints
 parseConstraint = parens (parseSoftConstraint <|> parseHardConstraint)
 
 skipBlock :: Parser ()
-skipBlock = void $ parens $ many (void (someBut "()") <|> skipBlock <?> "skipping this part")
+skipBlock = void $ parens $ many (void (someBut [_parenleft, _parenright]) <|> skipBlock <?> "skipping this part")
 
-parseBlock :: Input -> Parser a -> Parser a
+parseBlock :: ByteString -> Parser a -> Parser a
 parseBlock keyword pInner = parens (string keyword *> pSpace *> pInner <?> show keyword)
 
 parseAndBlock :: Parser PDDLConstraints
@@ -91,7 +89,7 @@ parseConstraints = pSpace *> (mconcat <$> parseDefineBlock) <* eof
 
 parsePDDLConstraints :: FilePath -> IO PDDLConstraints
 parsePDDLConstraints path = do
-  content <- TextIO.readFile path
+  content <- C8.readFile path
   case parseMaybe parseConstraints content of
     Just constraints -> return constraints
     Nothing -> error $ "Something went wrong while parsing the constraints in " ++ path ++ "."

@@ -5,15 +5,12 @@ module PlanningTask
     ptNumberAtoms,
     ptNumberActions,
     ptFacts,
-    showFact,
-    showFacts,
-    showAction,
-    printPlanningTask,
     fromSAS,
   )
 where
 
-import Constraints (Constraints (showConstraints))
+import Basic
+import Constraints (Constraints)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Data.List (find, sort, (\\))
@@ -21,7 +18,6 @@ import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Set as Set
 import SAS (SAS)
 import qualified SAS
-import Basic
 
 data PlanningTask constraintType = PlanningTask
   { ptAtoms :: [Atom],
@@ -41,24 +37,14 @@ ptNumberActions pt = length $ ptActions pt
 ptFacts :: PlanningTask c -> [Fact]
 ptFacts pt = map PosAtom (ptAtoms pt) ++ map NegAtom (ptAtoms pt)
 
-printPlanningTask :: (Constraints c) => PlanningTask c -> IO ()
-printPlanningTask pt =
-  C8.putStrLn $
-    C8.concat
-      [ "There are ",
-        C8.pack (show (ptNumberAtoms pt)),
-        " atoms:\n",
-        showAtoms (ptAtoms pt),
-        "\nActions:\n",
-        C8.unlines (map showAction (ptActions pt)),
-        "Initial state:\n",
-        C8.unlines $ map showFact (ptInitalState pt),
-        "Goal:\n",
-        showFacts (ptGoal pt),
-        showConstraints (ptConstraints pt),
-        "\nMutex Groups:\n",
-        C8.unlines (map (showFacts . \(MutexGroup facts) -> facts) (ptMutexGroups pt))
-      ]
+instance (Constraints c) => Show (PlanningTask c) where
+  show pt =
+    showNamedList ("There are " ++ show (ptNumberAtoms pt) ++ " atoms:") (ptAtoms pt)
+      ++ showNamedList "Actions:" (ptActions pt)
+      ++ showNamedList "Initial state:" (ptInitalState pt)
+      ++ showNamedList "Goal:" (ptGoal pt)
+      ++ show (ptConstraints pt)
+      ++ showNamedList "Mutex Groups:" (ptMutexGroups pt)
 
 nameToFact :: ByteString -> Fact
 nameToFact name

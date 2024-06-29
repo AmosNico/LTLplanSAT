@@ -1,20 +1,15 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Basic
   ( Atom (..),
-    showAtom,
-    showAtoms,
     Fact (..),
-    showFact,
-    showFacts,
     negateFact,
     isPosAtom,
     factToAtom,
-    MutexGroup (MutexGroup),
+    showNamedList,
+    MutexGroup (..),
     State,
     Goal,
     Action (..),
-    showAction,
+    showActionName,
     Time,
     Variable (..),
   )
@@ -22,28 +17,19 @@ where
 
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as C8
-import qualified Data.Foldable as Set
 import Data.Set (Set)
+import qualified Data.Set as Set
 
-newtype Atom = Atom ByteString deriving (Eq, Ord, Show)
+newtype Atom = Atom ByteString deriving (Eq, Ord)
 
-showAtom :: Atom -> ByteString
-showAtom (Atom name) = name
-
-showAtoms :: [Atom] -> ByteString
-showAtoms atoms = C8.intercalate (C8.pack ", ") $ map showAtom atoms
+instance Show Atom where
+  show (Atom name) = C8.unpack name
 
 data Fact = PosAtom Atom | NegAtom Atom deriving (Eq, Ord)
 
-showFact :: Fact -> ByteString
-showFact (PosAtom atom) = showAtom atom
-showFact (NegAtom atom) = C8.append "not " (showAtom atom)
-
 instance Show Fact where
-  show = C8.unpack . showFact
-
-showFacts :: [Fact] -> ByteString
-showFacts fs = C8.intercalate ", " $ map showFact fs
+  show (PosAtom atom) = show atom
+  show (NegAtom atom) = "Not " ++ show atom
 
 negateFact :: Fact -> Fact
 negateFact (PosAtom atom) = NegAtom atom
@@ -57,7 +43,18 @@ factToAtom :: Fact -> Atom
 factToAtom (PosAtom atom) = atom
 factToAtom (NegAtom atom) = atom
 
+indent :: String -> String
+indent = unlines . map ("  " ++) . lines
+
+showNamedList :: (Show a) => String -> [a] -> String
+showNamedList name xs = name ++ "\n" ++ concatMap showItem xs
+  where
+    showItem x = indent $ show x
+
 newtype MutexGroup = MutexGroup [Fact]
+
+instance Show MutexGroup where
+  show (MutexGroup facts) = showNamedList "Mutex group" facts
 
 type State = [Fact]
 
@@ -70,7 +67,10 @@ data Action = Action
     actionCost :: Int
   }
 
--- No need to compare preconditions and postconditions
+showActionName :: Action -> String
+showActionName a = C8.unpack $ actionName a
+
+-- Assuming uniqueness of names, there is no need to compare preconditions and postconditions
 instance Eq Action where
   (==) a1 a2 = actionName a1 == actionName a2
 
@@ -78,22 +78,19 @@ instance Ord Action where
   compare a1 a2 = compare (actionName a1) (actionName a2)
 
 instance Show Action where
-  show a = C8.unpack $ actionName a
-
-showAction :: Action -> ByteString
-showAction (Action name pre post cost) =
-  C8.concat
-    [ name,
-      " (cost ",
-      C8.pack (show cost),
-      "): \n  pre = {",
-      showFacts $ Set.toList pre, -- TODO
-      "}: \n  post = {",
-      showFacts $ Set.toList post, -- TODO
-      "}"
-    ]
+  show (Action name pre post cost) =
+    C8.unpack name
+      ++ " (cost "
+      ++ show cost
+      ++ "):\n"
+      ++ indent (showNamedList "pre:" $ Set.toList pre)
+      ++ indent (showNamedList "post:" $ Set.toList post)
 
 type Time = Int
 
 data Variable = ActionVar Time Action | AtomVar Time Atom
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
+
+instance Show Variable where
+  show (ActionVar t action) = "ActionVariable " ++ show t ++ " " ++ showActionName action
+  show (AtomVar t atom) = "AtomVariable " ++ show t ++ " " ++ show atom

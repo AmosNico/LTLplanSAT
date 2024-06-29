@@ -22,7 +22,7 @@ instance Show Plan where
       ++ " and cost "
       ++ show (sum $ map actionCost as)
       ++ ":\n  "
-      ++ intercalate "\n  " (map show as)
+      ++ intercalate "\n  " (map showActionName as)
 
 defineVariables :: (E.MonadSAT s m) => PlanningTask c -> Time -> m (Map Variable E.Bit)
 defineVariables pt k = sequence $ Map.fromList $ map (,E.exists) (actionVars ++ atomVars)

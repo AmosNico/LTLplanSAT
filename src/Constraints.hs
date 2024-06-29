@@ -9,8 +9,6 @@ module Constraints
 where
 
 import Control.Monad (replicateM)
-import Data.ByteString.Char8 (ByteString)
-import qualified Data.ByteString.Char8 as C8
 import Data.Map (Map, (!))
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -18,21 +16,20 @@ import qualified Ersatz as E
 import Basic (Atom, Fact (..), Time, Variable (AtomVar))
 
 -- This class captures the functionallity that is requires for constraints.
-class Constraints c where
+class Show c => Constraints c where
   constraintsToSAT :: (E.MonadSAT s m) => c -> Time -> Map Variable E.Bit -> m ()
 
   constraintsAtoms :: c -> Set Atom
 
-  showConstraints :: c -> ByteString
-
 data NoConstraint = NoConstraint
+
+instance Show NoConstraint where
+  show NoConstraint = "No constraints"
 
 instance Constraints NoConstraint where
   constraintsToSAT _ _ _ = return ()
 
   constraintsAtoms _ = Set.empty
-
-  showConstraints NoConstraint = C8.pack "No constraints"
 
 value :: Map Variable E.Bit -> Time -> Fact -> E.Bit
 value v t (PosAtom atom) = v ! AtomVar t atom

@@ -13,7 +13,7 @@ import LTLConstraints (pddlConstraintsToLTL)
 import PDDLConstraints (selectSoftConstraints)
 import ParsePDDLConstraints (parsePDDLConstraints)
 import ParseSAS (readSAS)
-import PlanningTask (PlanningTask, fromSAS, printPlanningTask)
+import PlanningTask (PlanningTask, fromSAS)
 import SequentialSAT (Plan (..), extractSequentialPlan, sequentialEncoding)
 import System.Process (callProcess, readProcess)
 
@@ -71,7 +71,7 @@ solveSAS' options constraints path = do
   sas <- readSAS path
   putStrLn "Translating to STRIPS."
   let pt = fromSAS sas constraints
-  when (outputPlanningTask options) $ printPlanningTask pt
+  when (outputPlanningTask options) $ print pt
   plan <- solve options pt
   print plan
   return plan
