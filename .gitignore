@@ -1,6 +1,7 @@
 .stack-work/
 dist-newstyle/
 output.sas
+dependencies.dot
 *.txt
 *.pyc
 *.exe

@@ -108,8 +108,8 @@ exampleRover :: Options -> Int -> IO ()
 exampleRover options n = solvePDDL options domain problem
   where
     version = if n < 10 then "0" ++ show n else show n
-    domain = "examples PDDL/IPC5 - rovers/QualitativePreferences/domain.pddl"
-    problem = "examples PDDL/IPC5 - rovers/QualitativePreferences/p" ++ version ++ ".pddl"
+    domain = "examples-PDDL/IPC5-rovers/QualitativePreferences/domain.pddl"
+    problem = "examples-PDDL/IPC5-rovers/QualitativePreferences/p" ++ version ++ ".pddl"
 
 exampleAirport :: Options -> Int -> IO ()
-exampleAirport options n = void $ solveSAS options ("examples SAS/" ++ show n ++ ".in")
+exampleAirport options n = void $ solveSAS options ("examples-SAS/" ++ show n ++ ".in")
