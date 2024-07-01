@@ -2,7 +2,8 @@
 
 module SequentialSAT (basicSATEncoding, sequentialEncoding, Plan (..), extractSequentialPlan) where
 
-import Constraints (Constraints (constraintsToSAT), atMostOne, value)
+import Basic (Action (..), Fact, MutexGroup (..), negateFact, showActionName)
+import Constraints (Constraints (constraintsToSAT), Time, Variable (..), atLeastOneAction, atMostOne, atMostOneAction, conditionalAtMostOne, noAction, value)
 import Control.Monad.State.Lazy (StateT)
 import Data.List (intercalate)
 import Data.Map (Map, (!))
@@ -10,8 +11,7 @@ import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
 import qualified Data.Set as Set
 import qualified Ersatz as E
-import PlanningTask
-import Basic
+import PlanningTask (PlanningTask (..), ptFacts)
 
 newtype Plan = Plan [Action]
 
@@ -25,10 +25,14 @@ instance Show Plan where
       ++ intercalate "\n  " (map showActionName as)
 
 defineVariables :: (E.MonadSAT s m) => PlanningTask c -> Time -> m (Map Variable E.Bit)
-defineVariables pt k = sequence $ Map.fromList $ map (,E.exists) (actionVars ++ atomVars)
+defineVariables pt k = sequence $ Map.fromList $ map (,E.exists) vars
   where
+    vars = actionVars ++ atomVars ++ amoVars ++ aloVars ++ noaVars
     actionVars = [ActionVar t a | a <- ptActions pt, t <- [1 .. k]]
     atomVars = [AtomVar t atom | atom <- ptAtoms pt, t <- [0 .. k]]
+    amoVars = [AtMostOneAction t | t <- [1 .. k]]
+    aloVars = [AtLeastOneAction t | t <- [1 .. k]]
+    noaVars = [NoAction t | t <- [1 .. k]]
 
 initialToSAT :: PlanningTask c -> Map Variable E.Bit -> E.Bit
 initialToSAT pt v = E.and $ map (value v 0) $ ptInitalState pt
@@ -52,6 +56,16 @@ mutexesToSAT pt t v = mapM_ mutexToSAT (ptMutexGroups pt)
   where
     mutexToSAT (MutexGroup facts) = atMostOne $ map (value v t) facts
 
+-- TODO: We don't need to do these if there are no constraints
+actionCountToSAT :: (E.MonadSAT s m) => PlanningTask c -> Time -> Map Variable E.Bit -> m ()
+actionCountToSAT pt k v = do
+  let actionBits t = map (\a -> v ! ActionVar t a) $ ptActions pt
+  let amoAction t = conditionalAtMostOne (atMostOneAction v t) (actionBits t)
+  sequence_ [amoAction t | t <- [1 .. k]]
+  let aloAction t = atLeastOneAction v t E.==> E.or (actionBits t)
+  E.assert $ E.and [aloAction t | t <- [1 .. k]]
+  E.assert $ E.and [noAction v t E.==> E.not aBit | t <- [1 .. k], aBit <- actionBits t]
+
 -- k is the maximum number of timesteps in the SAT encoding
 basicSATEncoding :: PlanningTask c -> Time -> StateT E.SAT IO (Map Variable E.Bit)
 basicSATEncoding pt k = do
@@ -61,17 +75,13 @@ basicSATEncoding pt k = do
   E.assert $ E.and [actionToSAT action t v | action <- ptActions pt, t <- [1 .. k]]
   E.assert $ E.and [frameAxiom pt fact t v | fact <- ptFacts pt, t <- [1 .. k]]
   mutexesToSAT pt k v
+  actionCountToSAT pt k v
   return v
-
-noParallelActions :: (E.MonadSAT s m) => PlanningTask c -> Time -> Map Variable E.Bit -> m ()
-noParallelActions pt k v = sequence_ [atMostOneAction t | t <- [1 .. k]]
-  where
-    atMostOneAction t = atMostOne $ map (\a -> v ! ActionVar t a) $ ptActions pt
 
 sequentialEncoding :: (Constraints c) => PlanningTask c -> Time -> StateT E.SAT IO (Map Variable E.Bit)
 sequentialEncoding pt k = do
   v <- basicSATEncoding pt k
-  noParallelActions pt k v
+  E.assert $ E.and $ map (atMostOneAction v) [1 .. k]
   constraintsToSAT (ptConstraints pt) k v
   return v
 

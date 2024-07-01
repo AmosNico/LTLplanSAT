@@ -10,8 +10,6 @@ module Basic
     Goal,
     Action (..),
     showActionName,
-    Time,
-    Variable (..),
   )
 where
 
@@ -85,12 +83,3 @@ instance Show Action where
       ++ "):\n"
       ++ indent (showNamedList "pre:" $ Set.toList pre)
       ++ indent (showNamedList "post:" $ Set.toList post)
-
-type Time = Int
-
-data Variable = ActionVar Time Action | AtomVar Time Atom
-  deriving (Eq, Ord)
-
-instance Show Variable where
-  show (ActionVar t action) = "ActionVariable " ++ show t ++ " " ++ showActionName action
-  show (AtomVar t atom) = "AtomVariable " ++ show t ++ " " ++ show atom

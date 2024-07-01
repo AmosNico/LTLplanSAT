@@ -2,8 +2,8 @@
 
 module Solver (Encoding (..), Options (..), solveSAS, solvePDDL, exampleRover, exampleAirport) where
 
-import Basic (Action (..), Time, Variable)
-import Constraints (Constraints, NoConstraint (NoConstraint))
+import Basic (Action (..))
+import Constraints (Constraints (minimalTimeLimit), NoConstraint (NoConstraint), Time, Variable)
 import Control.Monad (void, when)
 import qualified Data.ByteString.Char8 as C8
 import Data.Map (Map)
@@ -13,7 +13,7 @@ import LTLConstraints (pddlConstraintsToLTL)
 import PDDLConstraints (selectSoftConstraints)
 import ParsePDDLConstraints (parsePDDLConstraints)
 import ParseSAS (readSAS)
-import PlanningTask (PlanningTask, fromSAS)
+import PlanningTask (PlanningTask (ptConstraints), fromSAS)
 import SequentialSAT (Plan (..), extractSequentialPlan, sequentialEncoding)
 import System.Process (callProcess, readProcess)
 
@@ -64,7 +64,7 @@ iterativeSolve options pt k = do
       Just solution -> return $ extractPlan options pt k solution
 
 solve :: (Constraints c) => Options -> PlanningTask c -> IO Plan
-solve options pt = iterativeSolve options pt 5
+solve options pt = iterativeSolve options pt $ minimalTimeLimit $ ptConstraints pt
 
 solveSAS' :: (Constraints c) => Options -> c -> FilePath -> IO Plan
 solveSAS' options constraints path = do

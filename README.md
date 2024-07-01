@@ -17,10 +17,9 @@ The project (including the submodule with Fast-Downward) can be cloned, build us
 ```
 git clone --recurse-submodules https://github.com/AmosNico/LTLplanSAT
 cd LTLplanSAT
-stack build
 stack install
 ```
-The command `stack install` puts the executable LTLplanSAT.exe in the root folder of the project. You can then run `LTLplanSAT --help` to get an overview of the available commands.
+The command `stack install` builds the project and puts the executable LTLplanSAT.exe in the root folder of the project. You can then run `LTLplanSAT --help` to get an overview of the available commands.
 
 ## Structure of the project.
 ![Dependencies of the different modules in the project, see [dependencies.svg](dependencies.svg)](dependencies.svg)
@@ -34,7 +33,9 @@ TODO: include description of different modules.
 
 ## Licence
 
-Because Fast Downward is distributed under the GNU General Public License as published by the Free Software Foundation, this project falls under the same licence.
+Because Fast Downward is distributed under the GNU General Public License as published by the Free Software Foundation, this project falls under the same licence. If at some point the project would not use Fast Downward anymore, the licence might be changed to a more permissive open source license.
+
+Copyright 2024 Amos Nicodemus.
 
 ## References
 

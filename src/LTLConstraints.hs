@@ -1,14 +1,13 @@
 module LTLConstraints (LTLConstraint (..), pddlConstraintsToLTL) where
 
-import Basic (Fact, Time, Variable, factToAtom, showNamedList)
-import Constraints (Constraints (..), value)
+import Basic (Fact, factToAtom, negateFact, showNamedList)
+import Constraints (Constraints (..), Time, Variable, atLeastOneAction, exactlyOneAction, noAction, value)
 import Control.Exception (assert)
 import Data.Map (Map)
 import qualified Data.Set as Set
 import qualified Ersatz as E
 import GHC.Utils.Misc (nTimes)
 import PDDLConstraints (PDDLConstraint (..), PDDLConstraints (..))
-
 
 -- LTL constraints with an additional constraint Finally indicating that a fact should be true in the goal.
 -- This is equivalent to LTL since Finally f is equivalent to "Globally (Not Next Top ==> f)".
@@ -39,21 +38,56 @@ instance Show LTLConstraint where
   show (WeakNext c) = "WeakNext " ++ show c
   show (Finally c) = "Finally " ++ show c
 
+-- Helper for recursive transformations
+recurse :: (LTLConstraint -> LTLConstraint) -> LTLConstraint -> LTLConstraint
+recurse _ (Prop fact) = Prop fact
+recurse f (Not c) = Not (f c)
+recurse f (And cs) = And (map f cs)
+recurse f (Or cs) = Or (map f cs)
+recurse f (Eventually c) = Eventually (f c)
+recurse f (Globally c) = Globally (f c) 
+recurse f (Until c1 c2) = Until (f c1) (f c2)
+recurse f (Next c) = Next (f c)
+recurse f (WeakNext c) = WeakNext (f c)
+recurse f (Finally c) = Finally (f c)
+
+-- Convert constraints to negation normal form
+nnf :: LTLConstraint -> LTLConstraint
+nnf (Not (Prop f)) = Prop $ negateFact f
+nnf (Not (Not c)) = nnf c
+nnf (Not (And cs)) = Or $ map (nnf . Not) cs
+nnf (Not (Or cs)) = And $ map (nnf . Not) cs
+nnf (Not (Eventually c)) = Globally $ nnf $ Not c
+nnf (Not (Globally c)) = Eventually $ nnf $ Not c
+nnf (Not (Until c1 c2)) =
+  -- TODO: possibly exponential, add Release operator?
+  Or [Globally $ nnf $ Not c2, Until (nnf $ Not c2) (And [nnf $ Not c1, nnf $ Not c2])]
+nnf (Not (Next c)) = WeakNext $ nnf $ Not c
+nnf (Not (WeakNext c)) = Next $ nnf $ Not c
+nnf (Not (Finally c)) = Finally $ nnf $ Not c
+nnf c = recurse nnf c
+
 toSAT :: LTLConstraint -> Time -> Time -> Map Variable E.Bit -> E.Bit
 toSAT c0 t k v = assert (t <= k) $ case c0 of
-  (Prop fact) -> value v t fact
-  (Not c) -> E.not $ toSAT c t k v
-  (And cs) -> E.and $ map (\c -> toSAT c t k v) cs
-  (Or cs) -> E.or $ map (\c -> toSAT c t k v) cs
-  (Eventually c) -> E.or [toSAT c t' k v | t' <- [t .. k]]
-  (Globally c) -> E.and [toSAT c t' k v | t' <- [t .. k]]
-  (Until c1 c2) ->
+  Prop fact -> value v t fact
+  And cs -> E.and $ map (\c -> toSAT c t k v) cs
+  Or cs -> E.or $ map (\c -> toSAT c t k v) cs
+  Eventually c -> E.or [toSAT c t' k v | t' <- [t .. k]]
+  Globally c -> E.and [toSAT c t' k v | t' <- [t .. k]]
+  Until c1 c2 ->
     if t == k
       then toSAT c2 t k v
       else toSAT c2 t k v E.|| (toSAT c1 t k v E.&& toSAT (Until c1 c2) (t + 1) k v)
-  (Next c) -> if t < k then toSAT c (t + 1) k v else E.false
-  (WeakNext c) -> if t < k then toSAT c (t + 1) k v else E.true
-  (Finally c) -> toSAT c k k v
+  Next c ->
+    if t < k
+      then E.and [toSAT c (t + 1) k v, exactlyOneAction v t, atLeastOneAction v (t + 1)]
+      else E.false
+  WeakNext c ->
+    if t < k
+      then exactlyOneAction v t E.&& ((toSAT c (t + 1) k v E.&& atLeastOneAction v (t + 1)) E.|| noAction v t)
+      else E.true
+  Finally c -> toSAT c k k v
+  Not _ -> error "There should not be any negation in LTL-constraints when translating to SAT."
 
 over :: Int -> LTLConstraint -> LTLConstraint
 over n = nTimes n Next
@@ -65,7 +99,7 @@ weakUntil :: LTLConstraint -> LTLConstraint -> LTLConstraint
 weakUntil c1 c2 = Or [Until c1 c2, Globally c1]
 
 instance Constraints LTLConstraint where
-  constraintsToSAT c k v = E.assert $ toSAT c 0 k v
+  constraintsToSAT c k v = E.assert $ toSAT (nnf c) 0 k v
 
   constraintsAtoms (Prop fact) = Set.singleton $ factToAtom fact
   constraintsAtoms (Not c) = constraintsAtoms c

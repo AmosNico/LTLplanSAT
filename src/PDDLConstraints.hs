@@ -8,7 +8,8 @@ module PDDLConstraints
 where
 
 import Basic (Fact, factToAtom, showNamedList)
-import Constraints (Constraints (..), alwaysBetween, atMostOne, sometimeBetween, value)
+import Constraints (Constraints (..), alwaysBetween, atMostOne, atMostOneAction, exactlyOneAction, sometimeBetween, value)
+import Control.Exception (assert)
 import Control.Monad (filterM)
 import Data.Functor (void)
 import Data.List ((\\))
@@ -32,24 +33,40 @@ data PDDLConstraint
   deriving (Eq, Show)
 
 instance Constraints PDDLConstraint where
+  minimalTimeLimit (HoldDuring _ t2 _) = t2 - 1
+  minimalTimeLimit (HoldAfter t _) = t
+  minimalTimeLimit _ = 1
+
   constraintsToSAT (AtEnd f) k v = E.assert $ value v k f
   constraintsToSAT (Always f) k v = E.assert $ alwaysBetween 0 k f v
   constraintsToSAT (Sometime f) k v = E.assert $ sometimeBetween 0 k f v
-  constraintsToSAT (Within n f) k v = E.assert $ sometimeBetween 0 (min n k) f v
+  constraintsToSAT (Within n f) k v = do
+    -- TODO: it is possible to allow for more parallellism once f has been true
+    E.assert $ sometimeBetween 0 (min n k) f v
+    E.assert $ E.and $ map (atMostOneAction v) [1 .. n]
   constraintsToSAT (AtMostOnce f) k v =
-    -- f should become true at most once
-    void $ atMostOne [E.not (value v (t - 1) f) E.&& value v t f | t <- [1 .. k]]
-  constraintsToSAT (SometimeAfter f1 f2) k v = E.assert $ E.and [value v t1 f1 E.==> after t1 | t1 <- [0 .. k]]
+    void $ atMostOne $ map becomeTrueAt [1 .. k]
+    where
+      becomeTrueAt t = E.not (value v (t - 1) f) E.&& value v t f
+  constraintsToSAT (SometimeAfter f1 f2) k v =
+    E.assert $ E.and [value v t1 f1 E.==> after t1 | t1 <- [0 .. k]]
     where
       after t1 = sometimeBetween (t1 + 1) k f2 v
-  constraintsToSAT (SometimeBefore f1 f2) k v = E.assert $ E.and [value v t1 f1 E.==> before t1 | t1 <- [0 .. k]]
+  constraintsToSAT (SometimeBefore f1 f2) k v =
+    E.assert $ E.and [value v t1 f1 E.==> before t1 | t1 <- [0 .. k]]
     where
       before t1 = sometimeBetween 0 (t1 - 1) f2 v
-  constraintsToSAT (AlwaysWithin n f1 f2) k v = E.assert $ E.and [value v t1 f1 E.==> within t1 | t1 <- [0 .. k]]
+  constraintsToSAT (AlwaysWithin n f1 f2) k v =
+    E.assert $ E.and [value v t1 f1 E.==> within t1 | t1 <- [0 .. k]]
     where
       within t1 = sometimeBetween t1 (t1 + n) f2 v
-  constraintsToSAT (HoldDuring n1 n2 f) k v = E.assert $ if k < n2 then E.false else alwaysBetween n1 (n2 - 1) f v
-  constraintsToSAT (HoldAfter n f) k v = E.assert $ if k < n then E.false else alwaysBetween n k f v
+  constraintsToSAT (HoldDuring n1 n2 f) k v = assert (n2 - 1 <= k) $ do
+    E.assert $ alwaysBetween n1 (n2 - 1) f v
+    E.assert $ E.and $ map (exactlyOneAction v) [1 .. n2 - 1]
+  constraintsToSAT (HoldAfter n f) k v = assert (n <= k) $ do
+    E.assert $ alwaysBetween n k f v
+    E.assert $ E.and $ map (exactlyOneAction v) [1 .. n]
+
 
   constraintsAtoms (AtEnd f) = Set.singleton $ factToAtom f
   constraintsAtoms (Always f) = Set.singleton $ factToAtom f
@@ -75,6 +92,8 @@ instance Show PDDLConstraints where
       ++ showNamedList "Ignored soft constraints:" ic
 
 instance Constraints PDDLConstraints where
+  minimalTimeLimit (PDDLConstraints hc sc _) = maximum $ 1 : map minimalTimeLimit (hc ++ sc)
+
   constraintsToSAT (PDDLConstraints hc sc _) t v = mapM_ (\c -> constraintsToSAT c t v) (hc ++ sc)
 
   constraintsAtoms (PDDLConstraints hc sc _) = Set.unions $ map constraintsAtoms $ hc ++ sc
