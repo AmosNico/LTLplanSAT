@@ -10,7 +10,7 @@ module PlanningTask
 where
 
 import Basic
-import Constraints (Constraints)
+import Constraints (IsConstraints)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Data.List (find, sort, (\\))
@@ -37,7 +37,7 @@ ptNumberActions pt = length $ ptActions pt
 ptFacts :: PlanningTask c -> [Fact]
 ptFacts pt = map PosAtom (ptAtoms pt) ++ map NegAtom (ptAtoms pt)
 
-instance (Constraints c) => Show (PlanningTask c) where
+instance (IsConstraints c) => Show (PlanningTask c) where
   show pt =
     showNamedList ("There are " ++ show (ptNumberAtoms pt) ++ " atoms:") (ptAtoms pt)
       ++ showNamedList "Actions:" (ptActions pt)

@@ -3,13 +3,14 @@
 module ParsePDDLConstraints (parsePDDLConstraints) where
 
 import Basic (Atom (Atom), Fact (PosAtom))
+import Constraints (Constraint (Constraint), singleHard, singleSoft)
 import Control.Monad (void)
 import qualified Data.ByteString as BS
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Data.Void (Void)
 import Data.Word8 (_parenleft, _parenright, _underscore)
-import PDDLConstraints (PDDLConstraint (..), PDDLConstraints (..), singleHard, singleSoft)
+import PDDLConstraints (PDDLConstraints, PDDLFormula (..))
 import Text.Megaparsec (Parsec, between, choice, empty, eof, many, noneOf, parseMaybe, some, try, (<?>), (<|>))
 import Text.Megaparsec.Byte (alphaNumChar, char, space1, string)
 import Text.Megaparsec.Byte.Lexer (decimal, skipLineComment, space, symbol)
@@ -42,8 +43,8 @@ parsePredicate = parens $ do
 pKey :: ByteString -> Parser ByteString
 pKey keyword = string keyword <* pSpace
 
-parsePDDLConstraint :: Parser PDDLConstraint
-parsePDDLConstraint =
+parsePDDLFormula :: Parser PDDLFormula
+parsePDDLFormula =
   parens
     ( choice
         [ AtEnd <$> (pKey "at end" *> parsePredicate),
@@ -60,8 +61,11 @@ parsePDDLConstraint =
         <?> "constraint"
     )
 
+parsePDDLConstraint :: Parser (Constraint PDDLFormula)
+parsePDDLConstraint = Constraint <$> (pKey "preference" *> parseName) <*> (pSpace *> parsePDDLFormula)
+
 parseSoftConstraint :: Parser PDDLConstraints
-parseSoftConstraint = singleSoft <$> (pKey "preference" *> some alphaNumChar *> pSpace *> parsePDDLConstraint)
+parseSoftConstraint = singleSoft <$> parsePDDLConstraint
 
 parseHardConstraint :: Parser PDDLConstraints
 parseHardConstraint = singleHard <$> parsePDDLConstraint

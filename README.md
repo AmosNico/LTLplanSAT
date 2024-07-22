@@ -17,9 +17,9 @@ The project (including the submodule with Fast-Downward) can be cloned, build us
 ```
 git clone --recurse-submodules https://github.com/AmosNico/LTLplanSAT
 cd LTLplanSAT
-stack install
+stack build
 ```
-The command `stack install` builds the project and puts the executable LTLplanSAT.exe in the root folder of the project. You can then run `LTLplanSAT --help` to get an overview of the available commands.
+After that you can run `stack exec LTLplanSAT -- --help` to get an overview of the available commands. Alternatively, on Windows you can run command `stack install` to build the project and to put the executable LTLplanSAT.exe in the root folder of the project. You can then run `LTLplanSAT --help` to get an overview of the available commands.
 
 ## Structure of the project.
 ![Dependencies of the different modules in the project, see [dependencies.svg](dependencies.svg)](dependencies.svg)

@@ -3,7 +3,7 @@
 module SequentialSAT (basicSATEncoding, sequentialEncoding, Plan (..), extractSequentialPlan) where
 
 import Basic (Action (..), Fact, MutexGroup (..), negateFact, showActionName)
-import Constraints (Constraints (constraintsToSAT), Time, Variable (..), atLeastOneAction, atMostOne, atMostOneAction, conditionalAtMostOne, noAction, value)
+import Constraints (IsConstraints (constraintsToSAT), Time, Variable (..), atLeastOneAction, atMostOne, atMostOneAction, conditionalAtMostOne, noAction, value)
 import Control.Monad.State.Lazy (StateT)
 import Data.List (intercalate)
 import Data.Map (Map, (!))
@@ -78,7 +78,7 @@ basicSATEncoding pt k = do
   actionCountToSAT pt k v
   return v
 
-sequentialEncoding :: (Constraints c) => PlanningTask c -> Time -> StateT E.SAT IO (Map Variable E.Bit)
+sequentialEncoding :: (IsConstraints c) => PlanningTask c -> Time -> StateT E.SAT IO (Map Variable E.Bit)
 sequentialEncoding pt k = do
   v <- basicSATEncoding pt k
   E.assert $ E.and $ map (atMostOneAction v) [1 .. k]

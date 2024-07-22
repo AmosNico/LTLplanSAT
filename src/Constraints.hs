@@ -1,8 +1,15 @@
+{-# LANGUAGE DeriveFunctor #-}
+
 module Constraints
   ( Time,
     Variable (..),
+    Constraint (..),
     Constraints (..),
+    IsConstraints (..),
     NoConstraint (..),
+    singleHard,
+    singleSoft,
+    selectSoftConstraints,
     value,
     atMostOneAction,
     atLeastOneAction,
@@ -15,12 +22,15 @@ module Constraints
   )
 where
 
-import Basic (Action, Atom, Fact (..), showActionName)
-import Control.Monad (replicateM)
+import Basic (Action, Atom, Fact (..), showActionName, showNamedList)
+import Control.Monad (filterM, replicateM)
+import Data.ByteString (ByteString)
+import Data.List ((\\))
 import Data.Map (Map, (!))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Ersatz as E
+import System.Random (randomRIO)
 
 -- Time steps in the SAT-solver. This is not the same as the number of actions in the sat solver.
 type Time = Int
@@ -41,25 +51,75 @@ instance Show Variable where
   show (AtLeastOneAction t) = "AtLeastOneAction " ++ show t
   show (NoAction t) = "NoAction " ++ show t
 
--- This class captures the functionallity that is requires for constraints.
-class (Show c) => Constraints c where
+-- Given a formula type a, define the type of constraint over a
+data Constraint a = Constraint
+  { constraintID :: ByteString,
+    constraintFormula :: a
+  }
+  deriving (Functor, Eq)
+
+instance (Show a) => Show (Constraint a) where
+  show = show . constraintFormula
+
+data Constraints a
+  = Constraints
+      [Constraint a] -- Hard constraints
+      [Constraint a] -- Selected soft constraints
+      [Constraint a] -- Ignored soft constraints
+  deriving (Functor)
+
+instance (Show a) => Show (Constraints a) where
+  show (Constraints hc sc ic) =
+    showNamedList "Hard constraints:" hc
+      ++ showNamedList "Selected soft constraints:" sc
+      ++ showNamedList "Ignored soft constraints:" ic
+
+instance Semigroup (Constraints a) where
+  Constraints hc1 sc1 ic1 <> Constraints hc2 sc2 ic2 =
+    Constraints (hc1 <> hc2) (sc1 <> sc2) (ic1 <> ic2)
+
+instance Monoid (Constraints a) where
+  mempty = Constraints mempty mempty mempty
+
+-- This class captures the functionallity of constraints.
+-- Each type of formula should be an instance of this class, and then
+-- the instance of the corresponding Constraints type follows from below.
+class (Show a) => IsConstraints a where
   -- Some constraints like HoldDuring need a minimal number of time steps.
-  minimalTimeLimit :: c -> Time
+  minimalTimeLimit :: a -> Time
   minimalTimeLimit _ = 1
 
-  constraintsToSAT :: (E.MonadSAT s m) => c -> Time -> Map Variable E.Bit -> m ()
+  constraintsToSAT :: (E.MonadSAT s m) => a -> Time -> Map Variable E.Bit -> m ()
 
-  constraintsAtoms :: c -> Set Atom
+  constraintsAtoms :: a -> Set Atom
 
 data NoConstraint = NoConstraint
 
 instance Show NoConstraint where
   show NoConstraint = "No constraints"
 
-instance Constraints NoConstraint where
+instance IsConstraints NoConstraint where
   constraintsToSAT _ _ _ = return ()
 
   constraintsAtoms _ = Set.empty
+
+instance (IsConstraints a) => IsConstraints (Constraints a) where
+  minimalTimeLimit (Constraints hc sc _) = maximum $ 1 : map (minimalTimeLimit . constraintFormula) (hc ++ sc)
+
+  constraintsToSAT (Constraints hc sc _) t v = mapM_ (\c -> constraintsToSAT (constraintFormula c) t v) (hc ++ sc)
+
+  constraintsAtoms (Constraints hc sc _) = Set.unions $ map (constraintsAtoms . constraintFormula) $ hc ++ sc
+
+singleHard, singleSoft :: Constraint a -> Constraints a
+singleHard c = Constraints [c] [] []
+singleSoft c = Constraints [] [] [c]
+
+selectSoftConstraints :: (Eq a) => Constraints a -> Double -> IO (Constraints a)
+selectSoftConstraints (Constraints hc sc ic) probability = do
+  let choose = (< probability) <$> randomRIO (0.0, 1.0)
+  sc' <- filterM (const choose) (sc ++ ic)
+  let ic' = (sc ++ ic) \\ sc'
+  return (Constraints hc sc' ic')
 
 value :: Map Variable E.Bit -> Time -> Fact -> E.Bit
 value v t (PosAtom atom) = v ! AtomVar t atom

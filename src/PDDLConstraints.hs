@@ -1,25 +1,15 @@
-module PDDLConstraints
-  ( PDDLConstraint (..),
-    PDDLConstraints (PDDLConstraints),
-    singleHard,
-    singleSoft,
-    selectSoftConstraints,
-  )
-where
+module PDDLConstraints (PDDLFormula (..), PDDLConstraints) where
 
-import Basic (Fact, factToAtom, showNamedList)
-import Constraints (Constraints (..), alwaysBetween, atMostOne, atMostOneAction, exactlyOneAction, sometimeBetween, value)
+import Basic (Fact, factToAtom)
+import Constraints
 import Control.Exception (assert)
-import Control.Monad (filterM)
 import Data.Functor (void)
-import Data.List ((\\))
 import qualified Data.Set as Set
 import qualified Ersatz as E
-import System.Random (randomRIO)
 
 -- These are the contraints of pddl 3 as introduced in "Plan Constraints and Preferences in PDDL3".
 -- The paper is not very on what the constraint HoldAfter exactly means, so fro HoldAfter I follow the planning wiki.
-data PDDLConstraint
+data PDDLFormula
   = AtEnd Fact
   | Always Fact
   | Sometime Fact
@@ -32,7 +22,9 @@ data PDDLConstraint
   | HoldAfter Int Fact -- HoldAfter t f means that f should always be true after t (including at time t).
   deriving (Eq, Show)
 
-instance Constraints PDDLConstraint where
+type PDDLConstraints = Constraints PDDLFormula
+
+instance IsConstraints PDDLFormula where
   minimalTimeLimit (HoldDuring _ t2 _) = t2 - 1
   minimalTimeLimit (HoldAfter t _) = t
   minimalTimeLimit _ = 1
@@ -67,7 +59,6 @@ instance Constraints PDDLConstraint where
     E.assert $ alwaysBetween n k f v
     E.assert $ E.and $ map (exactlyOneAction v) [1 .. n]
 
-
   constraintsAtoms (AtEnd f) = Set.singleton $ factToAtom f
   constraintsAtoms (Always f) = Set.singleton $ factToAtom f
   constraintsAtoms (Sometime f) = Set.singleton $ factToAtom f
@@ -78,40 +69,3 @@ instance Constraints PDDLConstraint where
   constraintsAtoms (AlwaysWithin _ f1 f2) = Set.fromList $ map factToAtom [f1, f2]
   constraintsAtoms (HoldDuring _ _ f) = Set.singleton $ factToAtom f
   constraintsAtoms (HoldAfter _ f) = Set.singleton $ factToAtom f
-
-data PDDLConstraints
-  = PDDLConstraints
-      [PDDLConstraint] -- Hard constraints
-      [PDDLConstraint] -- Selected soft constraints
-      [PDDLConstraint] -- Ignored soft constraints
-
-instance Show PDDLConstraints where
-  show (PDDLConstraints hc sc ic) =
-    showNamedList "Hard constraints:" hc
-      ++ showNamedList "Selected soft constraints:" sc
-      ++ showNamedList "Ignored soft constraints:" ic
-
-instance Constraints PDDLConstraints where
-  minimalTimeLimit (PDDLConstraints hc sc _) = maximum $ 1 : map minimalTimeLimit (hc ++ sc)
-
-  constraintsToSAT (PDDLConstraints hc sc _) t v = mapM_ (\c -> constraintsToSAT c t v) (hc ++ sc)
-
-  constraintsAtoms (PDDLConstraints hc sc _) = Set.unions $ map constraintsAtoms $ hc ++ sc
-
-instance Semigroup PDDLConstraints where
-  PDDLConstraints hc1 sc1 ic1 <> PDDLConstraints hc2 sc2 ic2 =
-    PDDLConstraints (hc1 <> hc2) (sc1 <> sc2) (ic1 <> ic2)
-
-instance Monoid PDDLConstraints where
-  mempty = PDDLConstraints mempty mempty mempty
-
-singleHard, singleSoft :: PDDLConstraint -> PDDLConstraints
-singleHard c = PDDLConstraints [c] [] []
-singleSoft c = PDDLConstraints [] [] [c]
-
-selectSoftConstraints :: PDDLConstraints -> Double -> IO PDDLConstraints
-selectSoftConstraints (PDDLConstraints hc sc ic) probability = do
-  let choose = (< probability) <$> randomRIO (0.0, 1.0)
-  sc' <- filterM (const choose) (sc ++ ic)
-  let ic' = (sc ++ ic) \\ sc'
-  return (PDDLConstraints hc sc' ic')

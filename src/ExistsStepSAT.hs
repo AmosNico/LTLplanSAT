@@ -3,7 +3,7 @@
 module ExistsStepSAT (existsStepEncoding, extractExistsStepPlan) where
 
 import Basic (Action (..), negateFact)
-import Constraints (Constraints, Time, Variable (ActionVar))
+import Constraints (IsConstraints, Time, Variable (ActionVar))
 import Control.Monad.State (StateT)
 import qualified Data.Graph as Graph
 import Data.List (sortOn)
@@ -85,7 +85,7 @@ existsStep pt k v = sequence_ [constraint t fact scc | scc <- disablingGraphSCC 
       chain (variables t $ reverse scc) (isErasing fact) (isRequiring fact) v
 
 -- TODO: some constraints don't allow parallel actions constraints
-existsStepEncoding :: (Constraints c) => PlanningTask c -> Time -> StateT E.SAT IO (Map Variable E.Bit)
+existsStepEncoding :: (IsConstraints c) => PlanningTask c -> Time -> StateT E.SAT IO (Map Variable E.Bit)
 existsStepEncoding pt k = do
   vars <- basicSATEncoding pt k
   existsStep pt k vars
