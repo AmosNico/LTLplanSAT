@@ -36,7 +36,7 @@ parseName = BS.pack <$> some (alphaNumChar <|> char _underscore)
 parsePredicate :: Parser Fact
 parsePredicate = parens $ do
   name <- parseName
-  space1
+  pSpace
   args <- some (parseName <* pSpace)
   return $ PosAtom $ Atom $ C8.concat [name, "(", C8.intercalate ", " args, ")"]
 

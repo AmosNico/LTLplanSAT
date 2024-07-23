@@ -1,11 +1,7 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Solver (Encoding (..), Options (..), solveSAS, solvePDDL, exampleRover, exampleAirport) where
 
-import Basic (Action (..))
 import Constraints (IsConstraints (minimalTimeLimit), NoConstraint (NoConstraint), Time, Variable, selectSoftConstraints)
 import Control.Monad (void, when)
-import qualified Data.ByteString.Char8 as C8
 import Data.Map (Map)
 import qualified Ersatz as E
 import ExistsStepSAT (existsStepEncoding, extractExistsStepPlan)
@@ -14,7 +10,8 @@ import ParsePDDLConstraints (parsePDDLConstraints)
 import ParseSAS (readSAS)
 import PlanningTask (PlanningTask (ptConstraints), fromSAS)
 import SequentialSAT (Plan (..), extractSequentialPlan, sequentialEncoding)
-import System.Process (callProcess, readProcess)
+import System.Process (readProcess)
+import Validate (validatePlan)
 
 data Encoding = Sequential | ExistsStep
 
@@ -78,18 +75,6 @@ solveSAS' options constraints path = do
 solveSAS :: Options -> FilePath -> IO Plan
 solveSAS options = solveSAS' options NoConstraint
 
-writePlan :: Plan -> IO ()
-writePlan (Plan as) =
-  C8.writeFile "plan.txt" $
-    C8.concat $
-      map (\a -> C8.concat ["(", actionName a, ")\n"]) as
-
-validatePlan :: FilePath -> FilePath -> Plan -> IO ()
-validatePlan domain problem plan = do
-  putStrLn "Checking the plan using Val."
-  writePlan plan
-  callProcess "Val/bin/Validate" [domain, problem, "plan.txt"]
-
 solvePDDL :: Options -> FilePath -> FilePath -> IO ()
 solvePDDL options domain problem = do
   putStrLn "Calling Fast-Downward to translate to SAS."
@@ -101,7 +86,7 @@ solvePDDL options domain problem = do
     if convertToLTL options
       then solveSAS' options (fmap pddlToLTL constraints') "output.sas"
       else solveSAS' options constraints' "output.sas"
-  when (optValidate options) $ validatePlan domain problem plan
+  when (optValidate options) $ validatePlan domain problem constraints' plan
 
 exampleRover :: Options -> Int -> IO ()
 exampleRover options n = solvePDDL options domain problem

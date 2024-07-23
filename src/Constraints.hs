@@ -5,6 +5,7 @@ module Constraints
     Variable (..),
     Constraint (..),
     Constraints (..),
+    activeConstraints,
     IsConstraints (..),
     NoConstraint (..),
     singleHard,
@@ -67,6 +68,9 @@ data Constraints a
       [Constraint a] -- Selected soft constraints
       [Constraint a] -- Ignored soft constraints
   deriving (Functor)
+
+activeConstraints :: Constraints a -> [Constraint a]
+activeConstraints (Constraints hard soft _) = hard ++ soft
 
 instance (Show a) => Show (Constraints a) where
   show (Constraints hc sc ic) =

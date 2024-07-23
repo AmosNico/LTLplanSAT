@@ -35,6 +35,7 @@ library
       SAS
       SequentialSAT
       Solver
+      Validate
   other-modules:
       Paths_LTLplanSAT
   autogen-modules:
