@@ -37,9 +37,12 @@ instance IsConstraints PDDLFormula where
     E.assert $ sometimeBetween 0 (min n k) f v
     E.assert $ E.and $ map (atMostOneAction v) [1 .. n]
   constraintsToSAT (AtMostOnce f) k v =
-    void $ atMostOne $ map becomeTrueAt [1 .. k]
+    void $ atMostOne $ map becomesTrueAt [0 .. k]
     where
-      becomeTrueAt t = E.not (value v (t - 1) f) E.&& value v t f
+      -- already true in the beginning
+      becomesTrueAt 0 = value v 0 f
+      -- becomes true at time t
+      becomesTrueAt t = E.not (value v (t - 1) f) E.&& value v t f
   constraintsToSAT (SometimeAfter f1 f2) k v =
     E.assert $ E.and [value v t1 f1 E.==> after t1 | t1 <- [0 .. k]]
     where

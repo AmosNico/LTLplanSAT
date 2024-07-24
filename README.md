@@ -24,12 +24,22 @@ After that you can run `stack exec LTLplanSAT -- --help` to get an overview of t
 ## Structure of the project.
 ![Dependencies of the different modules in the project, see [dependencies.svg](dependencies.svg)](dependencies.svg)
 
-TODO: include description of different modules.
+### General working
+TODO
+
+### Parsing the problem description
+TODO
+
+### Constraints
+The actual constraints are implemented as `LTLFormula` and `PDDLFormula` (in [LTLConstraints](src/LTLConstraints.hs) and [PDDLConstraints](src/ParsePDDLConstraints.hs)). These constraints are instances of the class `IsConstraint` (in [Constraints](src/Constraints.hs)) which provides all functionallity needed to work with constraints. The module Constraints also provides wrapper types `Constraint a` (consisting of a formula and an identifier for the constraint) and `Constraints a` (collecting different constraints and indicating whether they are hard or soft).
+
+### Solving the planning problem
+TODO
 
 ## Fast Downward
 [Fast Downward](https://github.com/aibasel/downward) (in the submodule [fast-downward](fast-downward)) is used to translate the PDDL domain and problem files into a SAS file. The only changes with respect to the original are:
 * The addition of ":constraints" and ":preferences" in the list of allowed requirements (see [here](fast-downward/src/translate/pddl/tasks.py#L77)). 
-* The verfication of ":metric" is removed (see [here](fast-downward/src/translate/pddl_parser/parsing_functions.py#L796-L798)), since the addition of ":preferences" broke this test.
+* The verfication of ":metric" is removed (see [here](fast-downward/src/translate/pddl_parser/parsing_functions.py#L796)), since the addition of ":preferences" broke this test.
 
 ## Licence
 

@@ -10,6 +10,7 @@ module Constraints
     NoConstraint (..),
     singleHard,
     singleSoft,
+    SelectSoftConstraints (..),
     selectSoftConstraints,
     value,
     atMostOneAction,
@@ -26,7 +27,7 @@ where
 import Basic (Action, Atom, Fact (..), showActionName, showNamedList)
 import Control.Monad (filterM, replicateM)
 import Data.ByteString (ByteString)
-import Data.List ((\\))
+import Data.List (partition, (\\))
 import Data.Map (Map, (!))
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -54,10 +55,13 @@ instance Show Variable where
 
 -- Given a formula type a, define the type of constraint over a
 data Constraint a = Constraint
-  { constraintID :: ByteString,
+  { constraintId :: ByteString,
     constraintFormula :: a
   }
-  deriving (Functor, Eq)
+  deriving (Functor)
+
+instance Eq (Constraint a) where
+  (==) c1 c2 = constraintId c1 == constraintId c2
 
 instance (Show a) => Show (Constraint a) where
   show = show . constraintFormula
@@ -118,12 +122,24 @@ singleHard, singleSoft :: Constraint a -> Constraints a
 singleHard c = Constraints [c] [] []
 singleSoft c = Constraints [] [] [c]
 
-selectSoftConstraints :: (Eq a) => Constraints a -> Double -> IO (Constraints a)
-selectSoftConstraints (Constraints hc sc ic) probability = do
+data SelectSoftConstraints = SelectRandom Double | SelectGiven (Set ByteString)
+
+selectRandomSoftConstraints :: Double -> Constraints a -> IO (Constraints a)
+selectRandomSoftConstraints probability (Constraints hc sc ic) = do
   let choose = (< probability) <$> randomRIO (0.0, 1.0)
   sc' <- filterM (const choose) (sc ++ ic)
   let ic' = (sc ++ ic) \\ sc'
   return (Constraints hc sc' ic')
+
+-- TODO check that all ids are valid ids and notify user if this is not the case
+selectGivenSoftConstraints :: Set ByteString -> Constraints a -> Constraints a
+selectGivenSoftConstraints ids (Constraints hc sc ic) = Constraints hc sc' ic'
+  where
+    (sc', ic') = partition ((`elem` ids) . constraintId) (sc ++ ic)
+
+selectSoftConstraints :: SelectSoftConstraints -> Constraints a -> IO (Constraints a)
+selectSoftConstraints (SelectRandom probability) constraints  = selectRandomSoftConstraints probability constraints
+selectSoftConstraints (SelectGiven ids) constraints = return $ selectGivenSoftConstraints ids constraints
 
 value :: Map Variable E.Bit -> Time -> Fact -> E.Bit
 value v t (PosAtom atom) = v ! AtomVar t atom

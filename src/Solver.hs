@@ -1,6 +1,6 @@
 module Solver (Encoding (..), Options (..), solveSAS, solvePDDL, exampleRover, exampleAirport) where
 
-import Constraints (IsConstraints (minimalTimeLimit), NoConstraint (NoConstraint), Time, Variable, selectSoftConstraints)
+import Constraints (IsConstraints (minimalTimeLimit), NoConstraint (NoConstraint), SelectSoftConstraints, Time, Variable, selectSoftConstraints)
 import Control.Monad (void, when)
 import Data.Map (Map)
 import qualified Ersatz as E
@@ -20,25 +20,25 @@ instance Show Encoding where
   show ExistsStep = "exists-step"
 
 data Options = Options
-  { softConstraintsProbability :: Double,
-    convertToLTL :: Bool,
-    outputPlanningTask :: Bool,
-    maxTimeSteps :: Int,
-    encoding :: Encoding,
+  { optSelectSoftConstraints :: SelectSoftConstraints,
+    optConvertToLTL :: Bool,
+    optPrintPlanningTask :: Bool,
+    optMaxTimeSteps :: Int,
+    optEncoding :: Encoding,
     optValidate :: Bool
   }
 
 callSAT :: (IsConstraints c) => PlanningTask c -> Options -> Time -> IO (E.Result, Maybe (Map Variable Bool))
 callSAT pt options k = do
   putStrLn $ "Initialize SAT-description with maximal plan length " ++ show k ++ "."
-  let problem = case encoding options of
+  let problem = case optEncoding options of
         Sequential -> sequentialEncoding pt k
         ExistsStep -> existsStepEncoding pt k
   putStrLn "Calling SAT-solver."
   E.solveWith E.cryptominisat5 problem
 
 extractPlan :: Options -> PlanningTask c -> Time -> Map Variable Bool -> Plan
-extractPlan options pt k v = case encoding options of
+extractPlan options pt k v = case optEncoding options of
   Sequential -> extractSequentialPlan pt k v
   ExistsStep -> extractExistsStepPlan pt k v
 
@@ -47,12 +47,12 @@ iterativeSolve options pt k = do
   (res, mSolution) <- callSAT pt options k
   case res of
     E.Unsatisfied ->
-      if k <= maxTimeSteps options
+      if k <= optMaxTimeSteps options
         then iterativeSolve options pt (ceiling (fromIntegral k * sqrt 2 :: Double))
         else
           fail $
-            "Giving up. There exists no plan of length"
-              ++ show (maxTimeSteps options)
+            "Giving up. There exists no plan of length "
+              ++ show (optMaxTimeSteps options)
               ++ " or less, the chosen constraints might be unsatisfiable."
     E.Unsolved -> fail "The SAT-solver could not solve the planning problem."
     E.Satisfied -> case mSolution of
@@ -67,7 +67,7 @@ solveSAS' options constraints path = do
   sas <- readSAS path
   putStrLn "Translating to STRIPS."
   let pt = fromSAS sas constraints
-  when (outputPlanningTask options) $ print pt
+  when (optPrintPlanningTask options) $ print pt
   plan <- solve options pt
   print plan
   return plan
@@ -81,9 +81,9 @@ solvePDDL options domain problem = do
   void $ readProcess "python" ["fast-downward/src/translate/translate.py", "--keep-unimportant-variables", domain, problem] ""
   putStrLn "Translation to SAS succeded."
   constraints <- parsePDDLConstraints problem
-  constraints' <- selectSoftConstraints constraints (softConstraintsProbability options)
+  constraints' <- selectSoftConstraints (optSelectSoftConstraints options) constraints
   plan <-
-    if convertToLTL options
+    if optConvertToLTL options
       then solveSAS' options (fmap pddlToLTL constraints') "output.sas"
       else solveSAS' options constraints' "output.sas"
   when (optValidate options) $ validatePlan domain problem constraints' plan

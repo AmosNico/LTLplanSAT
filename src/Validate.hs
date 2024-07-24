@@ -3,7 +3,7 @@
 module Validate (validatePlan) where
 
 import Basic (actionName, showNamedList)
-import Constraints (Constraints, activeConstraints, constraintID)
+import Constraints (Constraints, activeConstraints, constraintId)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Data.Set (Set)
@@ -42,7 +42,7 @@ parseConstraint = (C8.pack <$> some alphaNumChar) <* string ": " <* (decimal :: 
 parseConstraints :: Constraints a -> Parser Result
 parseConstraints constraints = do
   violated <- Set.fromList <$> many (try parseConstraint)
-  let relevant = Set.fromList $ map constraintID $ activeConstraints constraints
+  let relevant = Set.fromList $ map constraintId $ activeConstraints constraints
   let relevantViolated = Set.intersection violated relevant
   if null relevantViolated
     then return ValidPlan

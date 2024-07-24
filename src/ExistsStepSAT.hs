@@ -3,7 +3,7 @@
 module ExistsStepSAT (existsStepEncoding, extractExistsStepPlan) where
 
 import Basic (Action (..), negateFact)
-import Constraints (IsConstraints, Time, Variable (ActionVar))
+import Constraints (IsConstraints, Time, Variable (ActionVar), constraintsToSAT)
 import Control.Monad.State (StateT)
 import qualified Data.Graph as Graph
 import Data.List (sortOn)
@@ -13,7 +13,7 @@ import qualified Data.Set as Set
 import Data.Tree (flatten)
 import Data.Tuple.Extra (snd3)
 import qualified Ersatz as E
-import PlanningTask (PlanningTask (ptActions), ptFacts)
+import PlanningTask (PlanningTask, ptActions, ptConstraints, ptFacts)
 import SequentialSAT (Plan (..), basicSATEncoding)
 
 -- Adjacency list for the disabling graph.
@@ -89,7 +89,7 @@ existsStepEncoding :: (IsConstraints c) => PlanningTask c -> Time -> StateT E.SA
 existsStepEncoding pt k = do
   vars <- basicSATEncoding pt k
   existsStep pt k vars
-  -- constraintsToSAT (ptConstraints pt) k vars
+  constraintsToSAT (ptConstraints pt) k vars
   return vars
 
 extractExistsStepPlan :: PlanningTask c -> Time -> Map Variable Bool -> Plan

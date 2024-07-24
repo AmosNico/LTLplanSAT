@@ -23,7 +23,6 @@ data LTLFormula
   | WeakNext LTLFormula
   | Finally LTLFormula
 
--- TODO: fix title for constraints and maybe introduce analogue of LTLConstraints
 instance Show LTLFormula where
   show (Prop fact) = show fact
   show (Not c) = "Not " ++ show c
@@ -118,7 +117,7 @@ pddlToLTL (Always p) = Globally $ Prop p
 pddlToLTL (Sometime p) = Eventually $ Prop p
 pddlToLTL (Within t p) = Or $ map (\i -> over i $ Prop p) [0 .. t]
 pddlToLTL (AtMostOnce p) =
-  Globally $ Prop p ==> weakUntil (Prop p) (Not $ Prop p)
+  Globally $ Prop p ==> weakUntil (Prop p) (Globally $ Not $ Prop p)
 pddlToLTL (SometimeBefore p q) =
   weakUntil
     (And [Not $ Prop p, Not $ Prop q])

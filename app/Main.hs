@@ -1,20 +1,40 @@
 module Main (main) where
 
+import Constraints (SelectSoftConstraints (..))
 import Control.Monad (void)
+import qualified Data.ByteString.Char8 as C8
+import Data.Set (fromList)
 import Options.Applicative
 import Solver (Encoding (..), Options (..), exampleAirport, exampleRover, solvePDDL, solveSAS)
 import Text.Read (readMaybe)
 
-parseSCP :: Parser Double
-parseSCP = option auto modifier
+parseSSCRandom :: Parser SelectSoftConstraints
+parseSSCRandom = SelectRandom <$> option auto modifier
   where
     modifier =
-      long "soft-constraint"
+      long "select-random-soft-constraint"
+        <> short 'r'
         <> metavar "PROBABILITY"
         <> value 0
         <> showDefault
         <> help description
-    description = "The probability that each soft constraint is converted to a hard constraint."
+    description = "Randomly convert soft constraints to hard constraints with the given probability."
+
+parseSSCGiven :: Parser SelectSoftConstraints
+parseSSCGiven = SelectGiven <$> option reader modifier
+  where
+    reader = maybeReader $ Just . fromList . C8.split ',' . C8.pack
+    modifier =
+      long "select-given-soft-constraint"
+        <> short 'g'
+        <> metavar "LIST"
+        <> help description
+    description =
+      "Convert the given soft constraints (a list of identifiers of constraints as given in "
+        ++ "the pddl problem file, separated by commas) to hard constraints."
+
+parseSSC :: Parser SelectSoftConstraints
+parseSSC = parseSSCRandom <|> parseSSCGiven
 
 parseConvertToLTL :: Parser Bool
 parseConvertToLTL = switch (long "to-LTL" <> help description)
@@ -68,7 +88,7 @@ parseValidate = switch (long "VAL" <> help description)
 parsePDDLOptions :: Parser Options
 parsePDDLOptions =
   Options
-    <$> parseSCP
+    <$> parseSSC
     <*> parseConvertToLTL
     <*> parsePrintPT
     <*> parseMaxSteps
@@ -77,7 +97,7 @@ parsePDDLOptions =
 
 parseSASOptions :: Parser Options
 parseSASOptions =
-  Options 0 False
+  Options (SelectRandom 0) False
     <$> parsePrintPT
     <*> parseMaxSteps
     <*> parseEncoding
