@@ -5,10 +5,10 @@ cabal-version: 2.2
 -- see: https://github.com/sol/hpack
 
 name:           LTLplanSAT
-version:        0.1.0.0
+version:        0.0.0
 description:    Please see the README on GitHub at <https://github.com/AmosNico/LTLplanSAT#readme>
-homepage:       https://github.com/githubuser/LTLplanSAT#readme
-bug-reports:    https://github.com/githubuser/LTLplanSAT/issues
+homepage:       https://github.com/AmosNico/LTLplanSAT#readme
+bug-reports:    https://github.com/AmosNico/LTLplanSAT/issues
 author:         Amos Nicodemus
 maintainer:     nicodemusamos@gmail.com
 copyright:      2024 Amos Nicodemus
@@ -20,12 +20,12 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/LTLplanSAT
+  location: https://github.com/AmosNico/LTLplanSAT
 
 library
   exposed-modules:
-      Basic
       Constraints
+      ConvertSAS
       ExistsStepSAT
       LTLConstraints
       ParsePDDLConstraints
@@ -33,6 +33,7 @@ library
       PDDLConstraints
       PlanningTask
       SAS
+      SAT
       SequentialSAT
       Solver
       Validate

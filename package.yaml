@@ -1,6 +1,6 @@
 name:                LTLplanSAT
-version:             0.1.0.0
-github:              "githubuser/LTLplanSAT"
+version:             0.0.0
+github:              "AmosNico/LTLplanSAT"
 license:             "GPL-3.0-or-later"
 author:              "Amos Nicodemus"
 maintainer:          "nicodemusamos@gmail.com"
