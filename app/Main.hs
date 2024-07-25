@@ -1,11 +1,10 @@
 module Main (main) where
 
-import Constraints (SelectSoftConstraints (..))
 import Control.Monad (void)
 import qualified Data.ByteString.Char8 as C8
 import Data.Set (fromList)
 import Options.Applicative
-import Solver (Encoding (..), Options (..), exampleAirport, exampleRover, solvePDDL, solveSAS)
+import Solver (Encoding (..), Options (..), SelectSoftConstraints (..), exampleAirport, exampleRover, solvePDDL, solveSAS)
 import Text.Read (readMaybe)
 
 parseSSCRandom :: Parser SelectSoftConstraints
@@ -159,7 +158,9 @@ parseCommand = hsubparser $ commandPDDL <> commandSAS <> commandAirport <> comma
 parser :: ParserInfo Command
 parser = info (parseCommand <**> helper) describe
   where
-    describe = fullDesc <> progDesc "TODO" <> header "Welcome to LTLplanSAT"
+    describe = fullDesc <> progDesc description <> header "Welcome to LTLplanSAT"
+    description = "LTLplanSAT is a SAT based planner focussed on working with constraints. " 
+     ++ "The source code can be found on https://github.com/AmosNico/LTLplanSAT."
 
 main :: IO ()
 main = do

@@ -1,11 +1,12 @@
 module PDDLConstraints (PDDLFormula (..), PDDLConstraints) where
 
-import Basic (Fact, factToAtom)
-import Constraints
+import Constraints (Constraints, IsConstraints (..))
 import Control.Exception (assert)
 import Data.Functor (void)
 import qualified Data.Set as Set
 import qualified Ersatz as E
+import PlanningTask (Fact, factToAtom)
+import SAT (alwaysBetween, atMostOne, atMostOneAction, exactlyOneAction, factHolds, sometimeBetween)
 
 -- These are the contraints of pddl 3 as introduced in "Plan Constraints and Preferences in PDDL3".
 -- The paper is not very on what the constraint HoldAfter exactly means, so fro HoldAfter I follow the planning wiki.
@@ -29,7 +30,7 @@ instance IsConstraints PDDLFormula where
   minimalTimeLimit (HoldAfter t _) = t
   minimalTimeLimit _ = 1
 
-  constraintsToSAT (AtEnd f) k v = E.assert $ value v k f
+  constraintsToSAT (AtEnd f) k v = E.assert $ factHolds v k f
   constraintsToSAT (Always f) k v = E.assert $ alwaysBetween 0 k f v
   constraintsToSAT (Sometime f) k v = E.assert $ sometimeBetween 0 k f v
   constraintsToSAT (Within n f) k v = do
@@ -40,19 +41,19 @@ instance IsConstraints PDDLFormula where
     void $ atMostOne $ map becomesTrueAt [0 .. k]
     where
       -- already true in the beginning
-      becomesTrueAt 0 = value v 0 f
+      becomesTrueAt 0 = factHolds v 0 f
       -- becomes true at time t
-      becomesTrueAt t = E.not (value v (t - 1) f) E.&& value v t f
+      becomesTrueAt t = E.not (factHolds v (t - 1) f) E.&& factHolds v t f
   constraintsToSAT (SometimeAfter f1 f2) k v =
-    E.assert $ E.and [value v t1 f1 E.==> after t1 | t1 <- [0 .. k]]
+    E.assert $ E.and [factHolds v t1 f1 E.==> after t1 | t1 <- [0 .. k]]
     where
       after t1 = sometimeBetween (t1 + 1) k f2 v
   constraintsToSAT (SometimeBefore f1 f2) k v =
-    E.assert $ E.and [value v t1 f1 E.==> before t1 | t1 <- [0 .. k]]
+    E.assert $ E.and [factHolds v t1 f1 E.==> before t1 | t1 <- [0 .. k]]
     where
       before t1 = sometimeBetween 0 (t1 - 1) f2 v
   constraintsToSAT (AlwaysWithin n f1 f2) k v =
-    E.assert $ E.and [value v t1 f1 E.==> within t1 | t1 <- [0 .. k]]
+    E.assert $ E.and [factHolds v t1 f1 E.==> within t1 | t1 <- [0 .. k]]
     where
       within t1 = sometimeBetween t1 (t1 + n) f2 v
   constraintsToSAT (HoldDuring n1 n2 f) k v = assert (n2 - 1 <= k) $ do

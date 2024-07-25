@@ -2,7 +2,6 @@
 
 module ParsePDDLConstraints (parsePDDLConstraints) where
 
-import Basic (Atom (Atom), Fact (PosAtom))
 import Constraints (Constraint (Constraint), singleHard, singleSoft)
 import Control.Monad (void)
 import qualified Data.ByteString as BS
@@ -11,6 +10,7 @@ import qualified Data.ByteString.Char8 as C8
 import Data.Void (Void)
 import Data.Word8 (_parenleft, _parenright, _underscore)
 import PDDLConstraints (PDDLConstraints, PDDLFormula (..))
+import PlanningTask (Atom (Atom), Fact (PosAtom))
 import Text.Megaparsec (Parsec, between, choice, empty, eof, many, noneOf, parseMaybe, some, try, (<?>), (<|>))
 import Text.Megaparsec.Byte (alphaNumChar, char, space1, string)
 import Text.Megaparsec.Byte.Lexer (decimal, skipLineComment, space, symbol)

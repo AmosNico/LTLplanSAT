@@ -25,16 +25,19 @@ After that you can run `stack exec LTLplanSAT -- --help` to get an overview of t
 ![Dependencies of the different modules in the project, see [dependencies.svg](dependencies.svg)](dependencies.svg)
 
 ### General working
-TODO
+The module [Main](app/Main.hs) implements a command line interface to interact with the solver. The module [Solver](src/Solver.hs) linkes the different parts of the project together and provides the function `solvePDDL` and `solveSAS` for solving planning problems. These functions call other functions to parse the problem description, handle the constraints, solve the problem and validate it as described below.
 
 ### Parsing the problem description
-TODO
+The decription of the planning problem is represented using a type `PlanningTask c` (found in [PlanningTask](src/PlanningTask.hs)), where `c` is the type of the constraints (see below). The function `solvePDDL` (in [Solver](src/Solver.hs)) calls Fast-Downward whichs grounds the planning problem and outputs a SAS-file with the problem description. This SAS-file is then read in [ParseSAS](src/ParseSAS.hs) and converted to a `PlanningTask c` in [ConvertSAS](src/ConvertSAS.hs). The constraints are read separately in [ParsePDDLConstraints](src/ParsePDDLConstraints.hs).
 
 ### Constraints
-The actual constraints are implemented as `LTLFormula` and `PDDLFormula` (in [LTLConstraints](src/LTLConstraints.hs) and [PDDLConstraints](src/ParsePDDLConstraints.hs)). These constraints are instances of the class `IsConstraint` (in [Constraints](src/Constraints.hs)) which provides all functionallity needed to work with constraints. The module Constraints also provides wrapper types `Constraint a` (consisting of a formula and an identifier for the constraint) and `Constraints a` (collecting different constraints and indicating whether they are hard or soft).
+The actual constraints are implemented as `LTLFormula` and `PDDLFormula` (in [LTLConstraints](src/LTLConstraints.hs) and [PDDLConstraints](src/ParsePDDLConstraints.hs)). These constraints are instances of the class `IsConstraint` (in [Constraints](src/Constraints.hs)) which provides all functionallity needed to work with constraints. The module Constraints also provides wrapper types `Constraint a` (consisting of a formula and an identifier for the constraint) and `Constraints a` (collecting different constraints and indicating whether they are hard or soft). Furthermore this module provides functions `selectRandomSoftConstraints` and `selectGivenSoftConstraints` to convert soft constraints to hard constraints. [LTLConstraints](src/LTLConstraints.hs) also provides a function `pddlToLTL` to convert PDDL constraints to LTL.
 
 ### Solving the planning problem
-TODO
+In the module [Solver](src/Solver.hs), the SAT solver is iteratively called with increasing bounds for the number of time steps, until either a solution is found or a maximum number of time steps is reached. For each iteration the problem is translated with a sequential or parallel exists-step encoding using the modules [SequentialSAT](src/SequentialSAT.hs) and [ExistsStepSAT](src/ExistsStepSAT.hs). The module [SAT](src/SAT.hs) introduces the most common SAT variables and some helper functions used by these two modules.
+
+### Validation
+The function `validatePlan` in the module [Validate](src/Validate.hs) calls VAL and parses it's output to check whether the given plan is valid and whether the select constraints are respected.
 
 ## Fast Downward
 [Fast Downward](https://github.com/aibasel/downward) (in the submodule [fast-downward](fast-downward)) is used to translate the PDDL domain and problem files into a SAS file. The only changes with respect to the original are:

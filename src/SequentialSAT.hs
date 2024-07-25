@@ -1,65 +1,40 @@
-{-# LANGUAGE TupleSections #-}
+module SequentialSAT (basicSATEncoding, sequentialEncoding, extractSequentialPlan) where
 
-module SequentialSAT (basicSATEncoding, sequentialEncoding, Plan (..), extractSequentialPlan) where
-
-import Basic (Action (..), Fact, MutexGroup (..), negateFact, showActionName)
-import Constraints (IsConstraints (constraintsToSAT), Time, Variable (..), atLeastOneAction, atMostOne, atMostOneAction, conditionalAtMostOne, noAction, value)
+import Constraints (IsConstraints, constraintsToSAT)
 import Control.Monad.State.Lazy (StateT)
-import Data.List (intercalate)
-import Data.Map (Map, (!))
-import qualified Data.Map.Strict as Map
+import Data.Map (Map)
 import Data.Maybe (mapMaybe)
 import qualified Data.Set as Set
 import qualified Ersatz as E
-import PlanningTask (PlanningTask (..), ptFacts)
-
-newtype Plan = Plan [Action]
-
-instance Show Plan where
-  show (Plan as) =
-    "Plan with length "
-      ++ show (length as)
-      ++ " and cost "
-      ++ show (sum $ map actionCost as)
-      ++ ":\n  "
-      ++ intercalate "\n  " (map showActionName as)
-
-defineVariables :: (E.MonadSAT s m) => PlanningTask c -> Time -> m (Map Variable E.Bit)
-defineVariables pt k = sequence $ Map.fromList $ map (,E.exists) vars
-  where
-    vars = actionVars ++ atomVars ++ amoVars ++ aloVars ++ noaVars
-    actionVars = [ActionVar t a | a <- ptActions pt, t <- [1 .. k]]
-    atomVars = [AtomVar t atom | atom <- ptAtoms pt, t <- [0 .. k]]
-    amoVars = [AtMostOneAction t | t <- [1 .. k]]
-    aloVars = [AtLeastOneAction t | t <- [1 .. k]]
-    noaVars = [NoAction t | t <- [1 .. k]]
+import PlanningTask (Action (..), Fact, PlanningTask (..), goalFacts, mutexGroupFacts, negateFact, ptFacts, stateFacts)
+import SAT
 
 initialToSAT :: PlanningTask c -> Map Variable E.Bit -> E.Bit
-initialToSAT pt v = E.and $ map (value v 0) $ ptInitalState pt
+initialToSAT pt v = E.and $ map (factHolds v 0) $ stateFacts $ ptInitalState pt
 
 goalToSAT :: PlanningTask c -> Time -> Map Variable E.Bit -> E.Bit
-goalToSAT pt k v = E.and $ map (value v k) $ ptGoal pt
+goalToSAT pt k v = E.and $ map (factHolds v k) $ goalFacts $ ptGoal pt
 
 actionToSAT :: Action -> Time -> Map Variable E.Bit -> E.Bit
 actionToSAT a t v = E.and $ pre ++ add
   where
-    pre = map (\f -> v ! ActionVar t a E.==> value v (t - 1) f) $ Set.toList $ actionPre a
-    add = map (\f -> v ! ActionVar t a E.==> value v t f) $ Set.toList $ actionPost a
+    pre = map (\f -> actionHolds v t a E.==> factHolds v (t - 1) f) $ Set.toList $ actionPre a
+    add = map (\f -> actionHolds v t a E.==> factHolds v t f) $ Set.toList $ actionPost a
 
 frameAxiom :: PlanningTask c -> Fact -> Time -> Map Variable E.Bit -> E.Bit
-frameAxiom pt fact t v = E.or $ [value v (t - 1) fact, value v t $ negateFact fact] ++ actions
+frameAxiom pt fact t v = E.or $ [factHolds v (t - 1) fact, factHolds v t $ negateFact fact] ++ actions
   where
-    actions = map (\a -> v ! ActionVar t a) $ filter (\a -> fact `elem` actionPost a) $ ptActions pt
+    actions = map (actionHolds v t) $ filter (\a -> fact `elem` actionPost a) $ ptActions pt
 
 mutexesToSAT :: (E.MonadSAT s m) => PlanningTask c -> Time -> Map Variable E.Bit -> m ()
 mutexesToSAT pt t v = mapM_ mutexToSAT (ptMutexGroups pt)
   where
-    mutexToSAT (MutexGroup facts) = atMostOne $ map (value v t) facts
+    mutexToSAT mg = atMostOne $ map (factHolds v t) $ mutexGroupFacts mg
 
 -- TODO: We don't need to do these if there are no constraints
 actionCountToSAT :: (E.MonadSAT s m) => PlanningTask c -> Time -> Map Variable E.Bit -> m ()
 actionCountToSAT pt k v = do
-  let actionBits t = map (\a -> v ! ActionVar t a) $ ptActions pt
+  let actionBits t = map (actionHolds v t) $ ptActions pt
   let amoAction t = conditionalAtMostOne (atMostOneAction v t) (actionBits t)
   sequence_ [amoAction t | t <- [1 .. k]]
   let aloAction t = atLeastOneAction v t E.==> E.or (actionBits t)
@@ -89,7 +64,7 @@ extractSequentialPlan :: PlanningTask c -> Time -> Map Variable Bool -> Plan
 extractSequentialPlan pt k v = Plan $ mapMaybe extractAction [1 .. k]
   where
     extractAction :: Time -> Maybe Action
-    extractAction t = case filter (\a -> v ! ActionVar t a) $ ptActions pt of
+    extractAction t = case filter (actionHolds v t) $ ptActions pt of
       [] -> Nothing
       [a] -> Just a
       l ->

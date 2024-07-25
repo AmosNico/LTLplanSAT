@@ -1,4 +1,4 @@
-module ParseSAS (readSAS, toInt) where
+module ParseSAS (readSAS) where
 
 import Control.Exception (Exception, throw)
 import Control.Monad (replicateM, unless)

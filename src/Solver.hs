@@ -1,15 +1,18 @@
-module Solver (Encoding (..), Options (..), solveSAS, solvePDDL, exampleRover, exampleAirport) where
+-- Solver re-exports SelectSoftConstraints (..)
+module Solver (Encoding (..), Options (..), SelectSoftConstraints (..), solveSAS, solvePDDL, exampleRover, exampleAirport) where
 
-import Constraints (IsConstraints (minimalTimeLimit), NoConstraint (NoConstraint), SelectSoftConstraints, Time, Variable, selectSoftConstraints)
+import Constraints (IsConstraints, NoConstraint (NoConstraint), SelectSoftConstraints (..), minimalTimeLimit, selectSoftConstraints)
 import Control.Monad (void, when)
+import ConvertSAS (sasToPlanningTask)
 import Data.Map (Map)
 import qualified Ersatz as E
 import ExistsStepSAT (existsStepEncoding, extractExistsStepPlan)
 import LTLConstraints (pddlToLTL)
 import ParsePDDLConstraints (parsePDDLConstraints)
 import ParseSAS (readSAS)
-import PlanningTask (PlanningTask (ptConstraints), fromSAS)
-import SequentialSAT (Plan (..), extractSequentialPlan, sequentialEncoding)
+import PlanningTask (PlanningTask, ptConstraints)
+import SAT (Plan, Time, Variable)
+import SequentialSAT (extractSequentialPlan, sequentialEncoding)
 import System.Process (readProcess)
 import Validate (validatePlan)
 
@@ -66,7 +69,7 @@ solveSAS' :: (IsConstraints c) => Options -> c -> FilePath -> IO Plan
 solveSAS' options constraints path = do
   sas <- readSAS path
   putStrLn "Translating to STRIPS."
-  let pt = fromSAS sas constraints
+  let pt = sasToPlanningTask sas constraints
   when (optPrintPlanningTask options) $ print pt
   plan <- solve options pt
   print plan

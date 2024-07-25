@@ -1,30 +1,101 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module PlanningTask
-  ( PlanningTask (..),
+  ( Atom (..),
+    Fact (..),
+    negateFact,
+    factToAtom,
+    showNamedList,
+    MutexGroup (..),
+    State (..),
+    Goal (..),
+    Action (..),
+    showActionName,
+    PlanningTask (..),
     ptNumberAtoms,
     ptNumberActions,
     ptFacts,
-    fromSAS,
   )
 where
 
-import Basic
-import Constraints (IsConstraints)
-import Data.ByteString (ByteString)
+import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as C8
-import Data.List (find, sort, (\\))
-import qualified Data.List.NonEmpty as NonEmpty
+import Data.Set (Set)
 import qualified Data.Set as Set
-import SAS (SAS)
-import qualified SAS
 
-data PlanningTask constraintType = PlanningTask
+newtype Atom = Atom ByteString deriving (Eq, Ord)
+
+instance Show Atom where
+  show (Atom name) = C8.unpack name
+
+data Fact = PosAtom Atom | NegAtom Atom deriving (Eq, Ord)
+
+instance Show Fact where
+  show (PosAtom atom) = show atom
+  show (NegAtom atom) = "Not " ++ show atom
+
+negateFact :: Fact -> Fact
+negateFact (PosAtom atom) = NegAtom atom
+negateFact (NegAtom atom) = PosAtom atom
+
+factToAtom :: Fact -> Atom
+factToAtom (PosAtom atom) = atom
+factToAtom (NegAtom atom) = atom
+
+indent :: String -> String
+indent = unlines . map ("  " ++) . lines
+
+showNamedList :: (Show a) => String -> [a] -> String
+showNamedList name xs = name ++ "\n" ++ concatMap showItem xs
+  where
+    showItem x = indent $ show x
+
+newtype MutexGroup = MutexGroup {mutexGroupFacts :: [Fact]}
+
+instance Show MutexGroup where
+  show (MutexGroup facts) = showNamedList "Mutex group" facts
+
+newtype State = State {stateFacts :: [Fact]}
+
+instance Show State where
+  show (State facts) = showNamedList "Initial state:" facts
+
+newtype Goal = Goal {goalFacts :: [Fact]}
+
+instance Show Goal where
+  show (Goal facts) = showNamedList "Goal:" facts
+
+data Action = Action
+  { actionName :: ByteString,
+    actionPre :: Set Fact,
+    actionPost :: Set Fact,
+    actionCost :: Int
+  }
+
+showActionName :: Action -> String
+showActionName a = C8.unpack $ actionName a
+
+-- Assuming uniqueness of names, there is no need to compare preconditions and postconditions
+instance Eq Action where
+  (==) a1 a2 = actionName a1 == actionName a2
+
+instance Ord Action where
+  compare a1 a2 = compare (actionName a1) (actionName a2)
+
+instance Show Action where
+  show (Action name pre post cost) =
+    C8.unpack name
+      ++ " (cost "
+      ++ show cost
+      ++ "):\n"
+      ++ indent (showNamedList "pre:" $ Set.toList pre)
+      ++ indent (showNamedList "post:" $ Set.toList post)
+
+-- c is the type of constraints
+data PlanningTask c = PlanningTask
   { ptAtoms :: [Atom],
     ptActions :: [Action],
     ptInitalState :: State,
     ptGoal :: Goal,
-    ptConstraints :: constraintType,
+    ptConstraints :: c,
     ptMutexGroups :: [MutexGroup]
   }
 
@@ -37,69 +108,11 @@ ptNumberActions pt = length $ ptActions pt
 ptFacts :: PlanningTask c -> [Fact]
 ptFacts pt = map PosAtom (ptAtoms pt) ++ map NegAtom (ptAtoms pt)
 
-instance (IsConstraints c) => Show (PlanningTask c) where
+instance (Show c) => Show (PlanningTask c) where
   show pt =
     showNamedList ("There are " ++ show (ptNumberAtoms pt) ++ " atoms:") (ptAtoms pt)
       ++ showNamedList "Actions:" (ptActions pt)
-      ++ showNamedList "Initial state:" (ptInitalState pt)
-      ++ showNamedList "Goal:" (ptGoal pt)
+      ++ show (ptInitalState pt)
+      ++ show (ptGoal pt)
       ++ show (ptConstraints pt)
       ++ showNamedList "Mutex Groups:" (ptMutexGroups pt)
-
-nameToFact :: ByteString -> Fact
-nameToFact name
-  | "Atom " `C8.isPrefixOf` name = PosAtom $ Atom $ C8.drop 5 name
-  | "NegatedAtom " `C8.isPrefixOf` name = NegAtom $ Atom $ C8.drop 12 name
-  | otherwise =
-      error $
-        "Error while converting the SAS-description to PlanningTask. The SAS-fact "
-          ++ show name
-          ++ " is expected to start with \"Atom \" or \"NegatedAtom\"."
-
-convertFact :: SAS -> SAS.Fact -> Fact
-convertFact sas fact = nameToFact $ SAS.factName sas fact
-
-convertFacts :: SAS -> [SAS.Fact] -> [Fact]
-convertFacts sas = map $ convertFact sas
-
-deletingEffects :: SAS -> SAS.Action -> [Fact]
-deletingEffects sas a = convertFacts sas $ concatMap f (SAS.actionPost a)
-  where
-    getPre :: Int -> Maybe SAS.Fact
-    getPre var = find (\(var', _) -> var == var') (SAS.actionPre a)
-    -- get the deleting effects for the variable var
-    f (var, val) = case getPre var of
-      Just (_, val') -> [(var, val')]
-      Nothing -> [(var, val') | val' <- [0 .. SAS.domainSize sas var - 1], val /= val']
-
-convertAction :: SAS -> SAS.Action -> Action
-convertAction sas a@(SAS.Action name pre post c) =
-  Action name (Set.fromList pre') (Set.fromList $ post' ++ del) c
-  where
-    pre' = convertFacts sas pre
-    post' = convertFacts sas post
-    del = map negateFact $ deletingEffects sas a
-
-removeDuplicates :: (Ord a) => [a] -> [a]
-removeDuplicates = map NonEmpty.head . NonEmpty.group . sort
-
-convertInitialState :: SAS -> State
-convertInitialState sas = removeDuplicates (init1 ++ init2)
-  where
-    init' = zip [0 ..] $ SAS.initialState sas
-    init1 = convertFacts sas init'
-    init2 = map negateFact $ convertFacts sas $ SAS.facts sas \\ init'
-
-fromSAS :: SAS -> c -> PlanningTask c
-fromSAS sas constraints = PlanningTask atoms actions initial goal constraints (oldMGs ++ newMGs)
-  where
-    -- Note: not all facts correspond to facts in SAS, and every atom corresponds to one or two facts in SAS
-    atoms = removeDuplicates $ map factToAtom $ convertFacts sas $ SAS.facts sas
-    actions = map (convertAction sas) $ SAS.actions sas
-    initial = convertInitialState sas
-    goal = convertFacts sas $ SAS.goal sas
-    oldMGs = map (MutexGroup . convertFacts sas) $ SAS.mutexGroups sas
-    newMGs =
-      [ MutexGroup [convertFact sas (var, val) | val <- [0 .. SAS.domainSize sas var - 1]]
-        | var <- [0 .. SAS.numberVariables sas - 1]
-      ]

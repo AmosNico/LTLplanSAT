@@ -2,8 +2,7 @@
 
 module ExistsStepSAT (existsStepEncoding, extractExistsStepPlan) where
 
-import Basic (Action (..), negateFact)
-import Constraints (IsConstraints, Time, Variable (ActionVar), constraintsToSAT)
+import Constraints (IsConstraints, constraintsToSAT)
 import Control.Monad.State (StateT)
 import qualified Data.Graph as Graph
 import Data.List (sortOn)
@@ -13,8 +12,9 @@ import qualified Data.Set as Set
 import Data.Tree (flatten)
 import Data.Tuple.Extra (snd3)
 import qualified Ersatz as E
-import PlanningTask (PlanningTask, ptActions, ptConstraints, ptFacts)
-import SequentialSAT (Plan (..), basicSATEncoding)
+import PlanningTask (Action (..), PlanningTask, negateFact, ptActions, ptConstraints, ptFacts)
+import SAT (Plan (..), Time, Variable (ActionVar), actionHolds)
+import SequentialSAT (basicSATEncoding)
 
 -- Adjacency list for the disabling graph.
 -- We don't use nodes (first element), just keys (second element).
@@ -84,7 +84,6 @@ existsStep pt k v = sequence_ [constraint t fact scc | scc <- disablingGraphSCC 
       chain (variables t scc) (isErasing fact) (isRequiring fact) v
       chain (variables t $ reverse scc) (isErasing fact) (isRequiring fact) v
 
--- TODO: some constraints don't allow parallel actions constraints
 existsStepEncoding :: (IsConstraints c) => PlanningTask c -> Time -> StateT E.SAT IO (Map Variable E.Bit)
 existsStepEncoding pt k = do
   vars <- basicSATEncoding pt k
@@ -96,4 +95,4 @@ extractExistsStepPlan :: PlanningTask c -> Time -> Map Variable Bool -> Plan
 extractExistsStepPlan pt k v = Plan $ concatMap extractActions [1 .. k]
   where
     sortActions = sortOn (orderActions pt)
-    extractActions t = sortActions $ filter (\a -> v ! ActionVar t a) $ ptActions pt
+    extractActions t = sortActions $ filter (actionHolds v t) $ ptActions pt

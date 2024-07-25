@@ -1,15 +1,16 @@
-module LTLConstraints (LTLFormula (..), pddlToLTL) where
+module LTLConstraints (pddlToLTL) where
 
-import Basic (Fact, factToAtom, negateFact, showNamedList)
-import Constraints (IsConstraints (..), Time, Variable, atLeastOneAction, exactlyOneAction, noAction, value)
+import Constraints (IsConstraints (..))
 import Control.Exception (assert)
 import Data.Map (Map)
 import qualified Data.Set as Set
 import qualified Ersatz as E
 import GHC.Utils.Misc (nTimes)
 import PDDLConstraints (PDDLFormula (..))
+import PlanningTask (Fact, factToAtom, negateFact, showNamedList)
+import SAT (Time, Variable, atLeastOneAction, exactlyOneAction, factHolds, noAction)
 
--- LTL constraints with an additional constraint Finally indicating that a fact should be true in the goal.
+-- LTL constraints with an additional constraint `Finally` indicating that a fact should be true in the goal.
 -- This is equivalent to LTL since Finally f is equivalent to "Globally (Not Next Top ==> f)".
 data LTLFormula
   = Prop Fact
@@ -68,7 +69,7 @@ nnf c = recurse nnf c
 
 toSAT :: LTLFormula -> Time -> Time -> Map Variable E.Bit -> E.Bit
 toSAT c0 t k v = assert (t <= k) $ case c0 of
-  Prop fact -> value v t fact
+  Prop fact -> factHolds v t fact
   And cs -> E.and $ map (\c -> toSAT c t k v) cs
   Or cs -> E.or $ map (\c -> toSAT c t k v) cs
   Eventually c -> E.or [toSAT c t' k v | t' <- [t .. k]]

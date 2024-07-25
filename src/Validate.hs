@@ -2,14 +2,14 @@
 
 module Validate (validatePlan) where
 
-import Basic (actionName, showNamedList)
 import Constraints (Constraints, activeConstraints, constraintId)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Void (Void)
-import SequentialSAT (Plan (..))
+import PlanningTask (actionName, showNamedList)
+import SAT (Plan (Plan))
 import System.Process (readProcess)
 import Text.Megaparsec (Parsec, anySingle, eof, errorBundlePretty, many, runParser, skipManyTill, some, try, (<|>))
 import Text.Megaparsec.Char (alphaNumChar, space1, string)

@@ -1,3 +1,4 @@
+-- This module should always be imported qualified, because of conflicting names with PlanningTask.
 module SAS
   ( Variable (..),
     Fact,
@@ -8,8 +9,6 @@ module SAS
     SAS (..),
     domainSize,
     numberVariables,
-    perfectHash,
-    numberFacts,
     factName,
     facts,
   )
@@ -58,17 +57,6 @@ domainSize sas var = length $ varValues (variable sas var)
 
 numberVariables :: SAS -> Int
 numberVariables sas = length $ variables sas
-
--- Compute the hash of v = 0 for all SAS variables v. The last element is the number of facts
-perfectHash :: SAS -> Vector Int
-perfectHash sas = Vec.unfoldrExactN (numberVariables sas + 1) f (0, 0)
-  where
-    -- f iterates through all variables v and computes the hash for v = 0,
-    -- while remembering number of the variable and hash value
-    f (var, hash) = (hash, (var + 1, hash + domainSize sas var))
-
-numberFacts :: SAS -> Int
-numberFacts sas = perfectHash sas Vec.! numberVariables sas
 
 factName :: SAS -> Fact -> ByteString
 factName sas (var, val) = varValues (variable sas var) Vec.! val
